@@ -447,7 +447,7 @@ td.status-cell.interrupted {
 }
 </style>
 </head>
-<body onload="initializePage()">
+<body>
   <div class="content-container">
 <div class="header-with-logo">
   <img src="/logo.svg" alt="Logo" class="logo-img">
@@ -1093,7 +1093,7 @@ function initializePage() {
 
 
 // Initialize the page when loaded
-window.onload = initializePage;
+document.addEventListener("DOMContentLoaded", initializePage);
 
 </script>
 

@@ -24,15 +24,6 @@ String currentTriggerMode = "";  // Empty initially
 int sensorReadings[5];
 int turnDelay = 250;
 float pidKp, pidKi, pidKd;
-int motorSpeed, turnDelayMs;
-int prepare90 = 0;
-bool isTurning = false;
-unsigned long turnStartTime = 0;
-const unsigned long turnTimeout = 3000;  // 3 seconds timeout for turns
-enum TurnDirection { NONE,
-                     LEFT_90,
-                     RIGHT_90 };
-TurnDirection currentTurn = NONE;
 int count = 0;
 // PID state
 float lastError = 0;
@@ -71,7 +62,6 @@ struct RoundRecord {
 RoundRecord roundHistory[10];
 int currentRound = 1;
 int historyCount = 0;
-bool manualStop = false;
 
 // Web server
 WebServer server(80);
@@ -175,7 +165,7 @@ void turnLeftdetection() {
     setMotorSpeeds(0, 100);
     readSensors();
     if (sensorReadings[0] == HIGH || sensorReadings[1] == HIGH) {
-      break;  // Right sensors detected black
+      break;  // Left sensors detected black
     }
     delay(10);  // Small delay to prevent watchdog issues
   }
@@ -224,85 +214,97 @@ void updateStopwatch() {
     lastStopwatchUpdate = currentMillis;
   }
 }
+// Helper: add a field to JSON response with comma handling
+void addJsonField(String& json, bool& updated, String key, String val) {
+  if (updated) json += ",";
+  json += "\"" + key + "\":" + val;
+  updated = true;
+}
+
+// Helper: apply an integer parameter with constrain
+void applyIntParam(String name, int& var, int lo, int hi, String& json, bool& updated) {
+  if (!server.hasArg(name)) return;
+  var = constrain(server.arg(name).toInt(), lo, hi);
+  preferences.putInt(name, var);
+  addJsonField(json, updated, name, String(var));
+}
+
+// Helper: apply a float parameter with constrain
+void applyFloatParam(String name, float& var, int dec, float lo, float hi, String& json, bool& updated) {
+  if (!server.hasArg(name)) return;
+  var = constrain(server.arg(name).toFloat(), lo, hi);
+  preferences.putFloat(name, var);
+  addJsonField(json, updated, name, String(var, dec));
+}
+
 void handleSetPID() {
   // Check if client is still connected
   if (!server.client().connected()) {
     server.send(408, "text/plain", "Request timeout");
     return;
   }
-  preferences.begin("robot-config", false);  // Ensure read-write mode
+  preferences.begin("robot-config", false);
   bool updated = false;
   String jsonResponse = "{";
 
-  // Update speed if provided
-  if (server.hasArg("speed")) {
-    speedPercentage = server.arg("speed").toInt();
-    speedPercentage = constrain(speedPercentage, 10, 100);
-    preferences.putInt("speed", speedPercentage);
-    if (updated) jsonResponse += ",";
-    jsonResponse += "\"speed\":" + String(speedPercentage);
-    updated = true;
-  }
+  // Update speed if provided (int, 10-100)
+  applyIntParam("speed", speedPercentage, 10, 100, jsonResponse, updated);
 
-  // Update turn delay if provided
-  if (server.hasArg("turnDelay")) {
-    turnDelay = server.arg("turnDelay").toInt();
-    turnDelay = constrain(turnDelay, 0, 1000);
-    turnDelayMs = turnDelay;  // Make sure to update BOTH variables
-    preferences.putInt("turnDelay", turnDelay);
-    if (updated) jsonResponse += ",";
-    jsonResponse += "\"turnDelay\":" + String(turnDelay);
-    updated = true;
-  }
+  // Update turn delay if provided (int, 0-1000)
+  applyIntParam("turnDelay", turnDelay, 0, 1000, jsonResponse, updated);
 
-  if (server.hasArg("kp")) {
-    Kp = server.arg("kp").toFloat();
-    preferences.putFloat("kp", Kp);
-    if (updated) jsonResponse += ",";
-    jsonResponse += "\"kp\":" + String(Kp, 1);  // 1 decimal place
-    updated = true;
-  }
+  // Update kp if provided (float, 1 decimal, 0-100)
+  applyFloatParam("kp", Kp, 1, 0.0, 100.0, jsonResponse, updated);
 
-  if (server.hasArg("ki")) {
-    Ki = server.arg("ki").toFloat();
-    preferences.putFloat("ki", Ki);
-    if (updated) jsonResponse += ",";
-    jsonResponse += "\"ki\":" + String(Ki, 2);  // 2 decimal places
-    updated = true;
-  }
+  // Update ki if provided (float, 2 decimals, 0-1)
+  applyFloatParam("ki", Ki, 2, 0.0, 1.0, jsonResponse, updated);
 
-  if (server.hasArg("kd")) {
-    Kd = server.arg("kd").toFloat();
-    preferences.putFloat("kd", Kd);
-    if (updated) jsonResponse += ",";
-    jsonResponse += "\"kd\":" + String(Kd, 1);  // 1 decimal place
-    updated = true;
-  }
+  // Update kd if provided (float, 1 decimal, 0-100)
+  applyFloatParam("kd", Kd, 1, 0.0, 100.0, jsonResponse, updated);
 
   jsonResponse += "}";
-  preferences.end();  // Commit changes before sending response
+  preferences.end();  // Commit changes once
 
   if (updated) {
-    preferences.end();  // Make sure to commit changes
     server.send(200, "application/json", jsonResponse);
   } else {
     server.send(400, "application/json", "{\"error\":\"No valid parameters\"}");
   }
 }
+
+void resetPIDState() {
+  integral = 0;
+  lastError = 0;
+}
+
 void resetPID() {
+  // إذا كان الروبوت يعمل، أوقفه أولاً لمنع قفزة PID أثناء التشغيل
+  if (isRunning) {
+    stopRobot();
+  }
+
   preferences.begin("robot-config", false);
   preferences.clear();  // Delete all saved settings
-  preferences.end();
 
   // Reset to defaults in memory and active variables
   Kp = 40.0;
   Ki = 0.05;
   Kd = 45.0;
   speedPercentage = 30;
-  turnDelayMs = 260;
-  turnDelay = turnDelayMs;
+  turnDelay = 260;
 
-  server.send(200, "text/plain", "Reset to defaults");
+  // حفظ القيم في Preferences حتى لا تعود للقديمة بعد إعادة الإقلاع
+  preferences.putFloat("Kp", Kp);
+  preferences.putFloat("Ki", Ki);
+  preferences.putFloat("Kd", Kd);
+  preferences.putInt("speedPercentage", speedPercentage);
+  preferences.putInt("turnDelay", turnDelay);
+
+  preferences.end();
+
+  resetPIDState();
+
+  server.send(200, "application/json", "{\"success\":true,\"message\":\"Reset to defaults\"}");
 }
 void LoadDefaultValues() {
   preferences.begin("robot-config", false);  // Changed to read-write mode
@@ -323,13 +325,17 @@ void LoadDefaultValues() {
 }
 
 void startRobot() {
+  if (manualMode) {
+    server.send(400, "application/json", "{\"success\":false,\"message\":\"Cannot start in Manual Mode\"}");
+    return;
+  }
   startTriggerMode = currentTriggerMode;  // Store how we started
   interruptTriggerMode = "";              // Reset interrupt
+  startScheduled = false;                 // Cancel any scheduled start
   stopwatchValue = 0;
   startTime = millis();
   lastStopwatchUpdate = millis();
   shouldStoreStopwatch = true;
-  manualStop = false;
 
   isRunning = true;
   robotStatus = "Running";
@@ -341,12 +347,14 @@ void startRobot() {
 void stopRobot() {
   if (robotStatus == "Finished 🏁") {
     isRunning = false;
+    resetPIDState();
     move(STOP);
     digitalWrite(LED_PIN, LOW);
     return;
   }
 
   isRunning = false;
+  resetPIDState();
   startScheduled = false;
   move(STOP);
   digitalWrite(LED_PIN, LOW);
@@ -425,6 +433,7 @@ void handleStartTrigger() {
     currentTriggerMode = "button";
 
     if (isRunning) {
+      interruptTriggerMode = "button";  // Record that stop was triggered by button
       stopRobot();
     } else if (!manualMode) {
       startScheduled = true;
@@ -504,7 +513,7 @@ void updateLedStatus() {
       digitalWrite(LED_PIN, ledState);
       lastLedToggle = currentMillis;
     }
-  } else if (isRunning || robotStatus == "Running") {
+  } else if (isRunning) {
     // Fast blink while running
     if (currentMillis - lastLedToggle >= 200) {  // Fast blink
       ledState = !ledState;
@@ -576,7 +585,7 @@ void handleStartStop() {
   }
 
   // Update the handleStartStop function to track the trigger mode
-  if (robotStatus == "Running") {
+  if (isRunning) {
     // Explicitly mark this as a web interruption
     interruptTriggerMode = "web";
     currentTriggerMode = "web";
@@ -595,16 +604,6 @@ void handleStartStop() {
 }
 void readSensors() {
   for (int i = 0; i < 5; i++) sensorReadings[i] = digitalRead(sensorPins[i]);
-}
-void handleSpeed() {
-  if (server.hasArg("value")) {
-    speedPercentage = server.arg("value").toInt();
-    speedPercentage = constrain(speedPercentage, 10, 100);  // Limit between 10% and 100%
-    Serial.print("Speed set to: ");
-    Serial.print(speedPercentage);
-    Serial.println("%");
-  }
-  server.send(200, "text/plain", "OK");
 }
 void handleStatus() {
   String json = "{";
@@ -638,19 +637,30 @@ void handleStatus() {
   server.send(200, "application/json", json);
 }
 void setMode(String mode) {
-  move(STOP);
-  isRunning = false;
-  if (mode == "manual" && !manualMode) {
-    manualMode = true;
-    robotStatus = "Manual Mode";
-    statusColor = "blue";
-    Serial.println("Switched to manual mode");
-    startScheduled = false;  // Cancel pending auto actions
-  } else if (mode == "auto" && manualMode) {
-    manualMode = false;
-    robotStatus = "Ready";
-    statusColor = "green";
-    Serial.println("Switched to auto mode");
+  bool changingToManual = (mode == "manual");
+  bool changingToAuto = (mode == "auto");
+
+  // فقط إذا تغيّر الوضع فعلياً — تجنّب إيقاف الروبوت دون ضرورة
+  if ((changingToManual && !manualMode) || (changingToAuto && manualMode)) {
+    move(STOP);
+    isRunning = false;
+    resetPIDState();
+
+    // تصفير الوقت عند تغيير الوضع
+    stopwatchValue = 0;
+    startTime = 0;
+
+    if (changingToManual) {
+      manualMode = true;
+      statusColor = "blue";
+      Serial.println("Switched to manual mode");
+      startScheduled = false;  // Cancel pending auto actions
+    } else {  // changingToAuto
+      manualMode = false;
+      robotStatus = "Ready";
+      statusColor = "green";
+      Serial.println("Switched to auto mode");
+    }
   }
 }
 void handleNotFound() {
@@ -687,7 +697,6 @@ void startServer() {
   // Set up server routes
   server.on("/", handleRoot);
   server.on("/startstop", handleStartStop);
-  server.on("/speed", handleSpeed);
   server.on("/manual", handleManualControl);
   server.on("/forward", []() {
     if (manualMode) move(FORWARD);
@@ -734,19 +743,23 @@ void startServer() {
     } else if (requestedMode == "manual") {
       setMode("manual");
     }
-    server.send(200, "text/plain", "Mode synchronized");
+    server.send(200, "text/plain", "Mode: " + requestedMode);
   });
   server.on("/turnRight90", []() {
     if (manualMode) {
       turnRight90();
-      server.send(200);
+      server.send(200, "application/json", "{\"success\":true}");
+    } else {
+      server.send(200, "application/json", "{\"success\":false}");
     }
   });
 
   server.on("/turnLeft90", []() {
     if (manualMode) {
       turnLeft90();
-      server.send(200);
+      server.send(200, "application/json", "{\"success\":true}");
+    } else {
+      server.send(200, "application/json", "{\"success\":false}");
     }
   });
 

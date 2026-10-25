@@ -40,10 +40,12 @@
 | # | Commit | المرحلة |
 |---|--------|---------|
 | 0 | `chore: normalize line endings + docs` | تجهيز |
-| 1 | `refactor: apply approved fixes` | ② |
-| 2 | `refactor: reorder functions by call-graph DFS` | ③ |
-| 3 | `feat(ui): Arabize interface (RTL)` | ④ |
-| 4 | `docs: final documentation + application` | ⑤ |
+| 1 | `refactor: apply quick fixes (10-14, 16)` | ②أ |
+| 2 | `refactor: unify robot state enum (15)` | ②ب |
+| 3 | `chore: unify default PID values (19)` | ②ج |
+| 4 | `refactor: reorder functions by call-graph DFS` | ③ |
+| 5 | `feat(ui): Arabize interface (RTL)` | ④ |
+| 6 | `docs: final documentation + application` | ⑤ |
 
 ---
 
