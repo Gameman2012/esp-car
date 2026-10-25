@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>شرح كود روبوت تتبع الخط — ESP32</title>
+<style>
+  :root{
+    --bg:#080d1a;
+    --bg2:#0d1527;
+    --panel:#111c33;
+    --panel2:#16233d;
+    --line:#22304d;
+    --txt:#e8eefc;
+    --muted:#93a4c4;
+    --cyan:#22d3ee;
+    --cyan-dim:rgba(34,211,238,.12);
+    --violet:#a78bfa;
+    --violet-dim:rgba(167,139,250,.12);
+    --green:#34d399;
+    --green-dim:rgba(52,211,153,.12);
+    --amber:#fbbf24;
+    --amber-dim:rgba(251,191,36,.12);
+    --red:#f87171;
+    --red-dim:rgba(248,113,113,.12);
+    --mono:ui-monospace,"SF Mono",Consolas,"Courier New",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:
+      radial-gradient(900px 500px at 85% -10%, rgba(34,211,238,.10), transparent 60%),
+      radial-gradient(700px 400px at 5% 110%, rgba(167,139,250,.10), transparent 60%),
+      var(--bg);
+    color:var(--txt);
+    font-family:"Segoe UI",Tahoma,"Noto Naskh Arabic","Arial",sans-serif;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;
+    background-image:linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);
+    background-size:46px 46px;
+    mask-image:radial-gradient(circle at 50% 40%,#000 30%,transparent 90%);
+  }
+
+  /* ---------- Header ---------- */
+  header{
+    position:fixed;top:0;right:0;left:0;height:76px;z-index:50;
+    display:flex;align-items:center;gap:18px;
+    padding:0 26px;
+    background:rgba(8,13,26,.82);
+    backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;flex-direction:column;gap:2px;min-width:210px}
+  .brand b{font-size:15px;letter-spacing:.2px}
+  .brand span{font-size:11px;color:var(--muted);font-family:var(--mono);direction:ltr;text-align:right}
+  #breadcrumb{
+    flex:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:12px;direction:ltr;justify-content:flex-end;
+    color:var(--muted);overflow:hidden;
+  }
+  #breadcrumb .crumb{
+    padding:4px 9px;border:1px solid var(--line);border-radius:7px;
+    background:var(--panel);white-space:nowrap;
+  }
+  #breadcrumb .crumb.last{color:var(--cyan);border-color:rgba(34,211,238,.45);background:var(--cyan-dim)}
+  #counter{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  #progress{
+    position:fixed;top:76px;right:0;left:0;height:3px;background:rgba(255,255,255,.05);z-index:51;
+  }
+  #progressBar{height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--green));transition:width .35s ease}
+
+  /* ---------- Slides ---------- */
+  main{position:absolute;inset:79px 0 74px 0;overflow:hidden}
+  .slide{
+    position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;
+    padding:30px 34px 40px;
+    opacity:0;visibility:hidden;transform:translateY(14px);
+    transition:opacity .28s ease,transform .28s ease,visibility .28s;
+  }
+  .slide.active{opacity:1;visibility:visible;transform:none}
+  .slide::-webkit-scrollbar{width:9px}
+  .slide::-webkit-scrollbar-thumb{background:#22304d;border-radius:9px}
+
+  .s-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:22px;flex-wrap:wrap}
+  .s-num{
+    flex:0 0 auto;width:46px;height:46px;border-radius:13px;
+    display:grid;place-items:center;font-family:var(--mono);font-weight:700;font-size:16px;
+    color:var(--cyan);background:var(--cyan-dim);border:1px solid rgba(34,211,238,.35);
+  }
+  .s-title{flex:1;min-width:220px}
+  .s-title h2{font-size:26px;line-height:1.3;font-weight:700}
+  .s-title h2 code{font-family:var(--mono);font-size:23px;color:var(--cyan);direction:ltr;display:inline-block}
+  .s-title p{color:var(--muted);font-size:13.5px;margin-top:5px}
+
+  /* ---------- Generic ---------- */
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--bg2));
+    border:1px solid var(--line);border-radius:15px;padding:16px 17px;
+  }
+  .card h3{font-size:14.5px;margin-bottom:9px;display:flex;align-items:center;gap:8px}
+  .card p,.card li{font-size:13px;color:#c9d6ee;line-height:1.85}
+  .card ul{padding-inline-start:17px}
+  .card li{margin:2px 0}
+  .badge{
+    display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-family:var(--mono);
+    padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);
+    direction:ltr;
+  }
+  .badge.custom{color:var(--cyan);border-color:rgba(34,211,238,.4);background:var(--cyan-dim)}
+  .badge.builtin{color:var(--violet);border-color:rgba(167,139,250,.4);background:var(--violet-dim)}
+  .badge.ok{color:var(--green);border-color:rgba(52,211,153,.4);background:var(--green-dim)}
+  .badge.warn{color:var(--amber);border-color:rgba(251,191,36,.4);background:var(--amber-dim)}
+  .badge.bad{color:var(--red);border-color:rgba(248,113,113,.4);background:var(--red-dim)}
+
+  code.inl{
+    font-family:var(--mono);font-size:.92em;direction:ltr;display:inline-block;
+    background:rgba(255,255,255,.06);padding:1px 6px;border-radius:5px;color:#dbeafe;
+  }
+  pre{
+    background:#070c17;border:1px solid var(--line);border-radius:13px;
+    padding:15px 16px;overflow:auto;direction:ltr;text-align:left;
+    font-family:var(--mono);font-size:12.4px;line-height:1.85;color:#d6e2f7;
+  }
+  pre .c{color:#5b7291}      /* comment */
+  pre .k{color:#c084fc}      /* keyword */
+  pre .n{color:#22d3ee}      /* number/func */
+  pre .s{color:#86efac}      /* string */
+  pre .v{color:#fbbf24}      /* variable */
+
+  table{width:100%;border-collapse:collapse;font-size:12.8px;overflow:hidden;border-radius:12px}
+  th,td{padding:9px 11px;text-align:right;border-bottom:1px solid var(--line);vertical-align:top}
+  thead th{background:#16233d;color:#cfe0ff;font-size:12px;font-weight:600;white-space:nowrap}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:nth-child(even){background:rgba(255,255,255,.017)}
+  td code{font-family:var(--mono);direction:ltr;display:inline-block;color:#a5f3fc;font-size:12px}
+  .tbl-wrap{border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--panel)}
+
+  .note,.warn,.good{
+    border-radius:12px;padding:12px 15px;font-size:13px;line-height:1.85;
+    border:1px solid;margin-top:12px;
+  }
+  .note{background:rgba(34,211,238,.07);border-color:rgba(34,211,238,.28)}
+  .warn{background:rgba(251,191,36,.07);border-color:rgba(251,191,36,.3)}
+  .good{background:rgba(52,211,153,.07);border-color:rgba(52,211,153,.3)}
+  .note b,.warn b,.good b{color:#fff}
+
+  /* ---------- Flow ---------- */
+  .flow{display:flex;flex-direction:column;align-items:center;gap:0;margin:6px 0}
+  .flow .node{
+    background:var(--panel);border:1px solid var(--line);border-radius:11px;
+    padding:9px 16px;font-size:13px;text-align:center;min-width:200px;
+  }
+  .flow .node.cy{border-color:rgba(34,211,238,.45);background:var(--cyan-dim);color:#a5f3fc;font-family:var(--mono);font-size:12.5px}
+  .flow .node.gr{border-color:rgba(52,211,153,.4);background:var(--green-dim);color:#bbf7d0}
+  .flow .node.am{border-color:rgba(251,191,36,.4);background:var(--amber-dim);color:#fde68a}
+  .flow .node.rd{border-color:rgba(248,113,113,.4);background:var(--red-dim);color:#fecaca}
+  .flow .arrow{color:#3d5277;font-size:16px;line-height:1;padding:5px 0}
+  .flow .branch{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+  .modes{display:flex;gap:14px;flex-wrap:wrap}
+  .modes .col{flex:1;min-width:220px}
+
+  /* ---------- Chart (slide 1) ---------- */
+  .chart{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:18px}
+  .chart-col{background:rgba(17,28,51,.55);border:1px solid var(--line);border-radius:16px;padding:14px}
+  .chart-col > h3{
+    font-size:12.5px;color:var(--muted);font-family:var(--mono);letter-spacing:.5px;
+    margin-bottom:11px;display:flex;align-items:center;gap:7px;direction:ltr;justify-content:flex-end;
+  }
+  .fn{
+    display:block;width:100%;text-align:right;cursor:pointer;
+    background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:8px 11px;margin-bottom:7px;color:var(--txt);font:inherit;font-size:12.6px;
+    transition:.15s;position:relative;
+  }
+  .fn:hover{border-color:rgba(34,211,238,.55);background:#1b2a47;transform:translateX(-2px)}
+  .fn .name{font-family:var(--mono);direction:ltr;display:block;font-size:12px;color:var(--cyan);margin-bottom:2px}
+  .fn .desc{color:var(--muted);font-size:11.5px;display:block}
+  .fn.b{border-right:3px solid var(--violet)}
+  .fn.b .name{color:var(--violet)}
+  .fn.c{border-right:3px solid var(--cyan)}
+  .fn.leaf{cursor:default;opacity:.92}
+  .fn.leaf:hover{border-color:var(--line);transform:none;background:var(--panel2)}
+  .fn .go{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:10px;color:#4b6186;font-family:var(--mono)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;font-size:12px;color:var(--muted)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:6px;vertical-align:middle}
+  .lg-c{background:var(--cyan)} .lg-b{background:var(--violet)} .lg-l{background:#4b6186}
+
+  /* ---------- Footer nav ---------- */
+  footer{
+    position:fixed;bottom:0;right:0;left:0;height:74px;z-index:50;
+    display:flex;align-items:center;justify-content:space-between;gap:14px;
+    padding:0 24px;background:rgba(8,13,26,.85);backdrop-filter:blur(12px);
+    border-top:1px solid var(--line);
+  }
+  .nav-btn{
+    display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+    background:var(--panel);color:var(--txt);border:1px solid var(--line);
+    border-radius:11px;padding:10px 17px;font:inherit;font-size:13.5px;transition:.18s;
+  }
+  .nav-btn:hover:not(:disabled){border-color:rgba(34,211,238,.55);background:#18263f}
+  .nav-btn:disabled{opacity:.32;cursor:not-allowed}
+  .hint{font-size:11.5px;color:#5f7295;text-align:center;line-height:1.6}
+  .hint kbd{
+    font-family:var(--mono);font-size:10.5px;background:var(--panel);border:1px solid var(--line);
+    border-bottom-width:2px;border-radius:5px;padding:1px 6px;color:#a9bbd8;
+  }
+  .dots{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;max-width:340px}
+  .dots i{width:6px;height:6px;border-radius:50%;background:#2a3a58;cursor:pointer;transition:.2s}
+  .dots i.on{background:var(--cyan);transform:scale(1.5)}
+
+  /* ---------- Responsive ---------- */
+  @media (max-width:1150px){
+    .chart{grid-template-columns:1fr 1fr}
+    .chart-col:last-child{grid-column:1/-1}
+    .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
+  @media (max-width:860px){
+    header{height:66px;padding:0 14px;gap:10px}
+    .brand{display:none}
+    #progress{top:66px}
+    main{inset:69px 0 70px 0}
+    .slide{padding:18px 15px 30px}
+    .s-title h2{font-size:20px}
+    .s-title h2 code{font-size:18px}
+    .chart{grid-template-columns:1fr}
+    .g2,.g3,.g4{grid-template-columns:1fr}
+    .dots,.hint{display:none}
+    footer{height:66px;padding:0 14px}
+    .nav-btn{padding:9px 13px;font-size:12.5px}
+    table{font-size:11.6px}
+    th,td{padding:7px 8px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <b>شرح كود روبوت تتبع الخط</b>
+    <span>ESP32 · PID · WebServer</span>
+  </div>
+  <div id="breadcrumb"></div>
+  <div id="counter">1 / 28</div>
+</header>
+<div id="progress"><div id="progressBar"></div></div>
+
+<main id="deck">
+
+<!-- ================= 1 ================= -->
+<section class="slide active" data-path="Overview">
+  <div class="s-head">
+    <div class="s-num">01</div>
+    <div class="s-title">
+      <h2>الخريطة العامة للكود</h2>
+      <p>كل مربع = دالة. المربعات السماوية من صنعنا (اضغط للانتقال لشرحها) — البنفسجية دوال مدمجة (شرح مختصر فقط).</p>
+    </div>
+  </div>
+
+  <div class="chart">
+    <div class="chart-col">
+      <h3>setup()</h3>
+      <button class="fn c" data-goto="2"><span class="name">setup()</span><span class="desc">تهيئة كل شيء مرة واحدة</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="3"><span class="name">LoadDefaultValues()</span><span class="desc">قراءة الإعدادات من الفلاش</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="4"><span class="name">move()</span><span class="desc">تنفيذ اتجاه حركة</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="5"><span class="name">setMotorSpeeds()</span><span class="desc">PWM + اتجاه المحركات</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="6"><span class="name">beep()</span><span class="desc">صوت البازر</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="7"><span class="name">startServer()</span><span class="desc">WiFi + المسارات</span><span class="go">→</span></button>
+      <div style="margin-top:9px">
+        <span class="badge builtin">pinMode · Serial.begin · WiFi.softAP</span>
+      </div>
+    </div>
+
+    <div class="chart-col">
+      <h3>loop()</h3>
+      <button class="fn c" data-goto="8"><span class="name">loop()</span><span class="desc">الحلقة الرئيسية كل 5ms</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="9"><span class="name">updateLedStatus()</span><span class="desc">نمط وميض الـ LED</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="10"><span class="name">handleStartTrigger()</span><span class="desc">الزر الفيزيائي</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="13"><span class="name">FollowPathPID()</span><span class="desc">خوارزمية تتبع الخط</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="20"><span class="name">updateStopwatch()</span><span class="desc">عدّاد الوقت</span><span class="go">→</span></button>
+
+      <div style="height:10px"></div>
+
+      <button class="fn c" data-goto="16"><span class="name">readSensors()</span><span class="desc">قراءة 5 حساسات</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="17"><span class="name">detect90()</span><span class="desc">كشف المنعطف الحاد</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="18"><span class="name">turn*detection()</span><span class="desc">مسح يمين/شمال</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="19"><span class="name">endProcedure()</span><span class="desc">إنهاء الجولة</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="21"><span class="name">addRoundToHistory()</span><span class="desc">تسجيل الجولة</span><span class="go">→</span></button>
+    </div>
+
+    <div class="chart-col">
+      <h3>WebServer</h3>
+      <button class="fn c" data-goto="22"><span class="name">handleStartStop()</span><span class="desc">/startstop</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="23"><span class="name">handleStatus()</span><span class="desc">/status (JSON)</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="24"><span class="name">handleSetPID()</span><span class="desc">/setpid</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="24"><span class="name">resetPID()</span><span class="desc">/resetpid</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="25"><span class="name">setMode()</span><span class="desc">auto / manual</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="26"><span class="name">Manual routes</span><span class="desc">forward · left · cw · horn …</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="11"><span class="name">startRobot()</span><span class="desc">بدء الجولة</span><span class="go">→</span></button>
+      <button class="fn c" data-goto="12"><span class="name">stopRobot()</span><span class="desc">إيقاف + تسجيل</span><span class="go">→</span></button>
+      <div style="margin-top:9px">
+        <span class="badge builtin">server.on · server.send · server.serveStatic</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i class="lg-c"></i>دالة من صنعنا — لها شريحة تفصيلية</span>
+    <span><i class="lg-b"></i>دالة مدمجة — تُشرح داخل الشريحة</span>
+    <span><i class="lg-l"></i>مسار ويب</span>
+  </div>
+
+  <div class="note">
+    <b>ترتيب القراءة:</b> <code class="inl">setup()</code> ← الدوال المتداخلة ← <code class="inl">loop()</code> ← الدوال المتداخلة (اجتياز DFS).
+  </div>
+</section>
+
+<!-- ================= 2 ================= -->
+<section class="slide" data-path="setup()">
+  <div class="s-head">
+    <div class="s-num">02</div>
+    <div class="s-title"><h2><code>setup()</code></h2><p>تُنفَّذ مرة واحدة عند التشغيل — كل التهيئة هنا.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>① تهيئة الأطراف <span class="badge builtin">pinMode</span></h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>المجموعة</th><th>الأطراف</th><th>النمط</th></tr></thead>
+        <tbody>
+          <tr><td>درايفر L298N</td><td><code>ENA 33 · IN1 25 · IN2 26 · ENB 12 · IN3 27 · IN4 14</code></td><td>OUTPUT</td></tr>
+          <tr><td>الحساسات</td><td><code>19 · 18 · 21 · 17 · 16</code></td><td>INPUT</td></tr>
+          <tr><td>الزر</td><td><code>13</code></td><td><b>INPUT_PULLUP</b></td></tr>
+          <tr><td>البازر / الليد</td><td><code>32 / 2</code></td><td>OUTPUT</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:9px">⚠️ الزر بـ <code class="inl">INPUT_PULLUP</code> → مضغوط = <code class="inl">LOW</code>.</p>
+    </div>
+
+    <div class="card">
+      <h3>② ترتيب التشغيل</h3>
+      <div class="flow" style="align-items:stretch">
+        <div class="node cy">LoadDefaultValues()</div>
+        <div class="arrow">↓</div>
+        <div class="node">move(STOP) — المحركات واقفة</div>
+        <div class="arrow">↓</div>
+        <div class="node">Serial.begin(115200)</div>
+        <div class="arrow">↓</div>
+        <div class="node cy">startServer()</div>
+        <div class="arrow">↓</div>
+        <div class="node gr">beep(200) ×2</div>
+        <div class="arrow">↓</div>
+        <div class="node">LED = LOW</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>ليد البداية:</b> صوتان قصيران (<code class="inl">beep(200)</code> + <code class="inl">delay(200)</code> + <code class="inl">beep(200)</code>) = إشارة «الجهاز جاهز».
+  </div>
+</section>
+
+<!-- ================= 3 ================= -->
+<section class="slide" data-path="setup() → LoadDefaultValues()">
+  <div class="s-head">
+    <div class="s-num">03</div>
+    <div class="s-title"><h2><code>LoadDefaultValues()</code></h2><p>قراءة الإعدادات المحفوظة من الفلاش (NVS) مع قيم افتراضية.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>المفاتيح والقيم الافتراضية</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>المفتاح</th><th>المتغير</th><th>الافتراضي</th></tr></thead>
+        <tbody>
+          <tr><td><code>kp</code></td><td>Kp</td><td>35.0</td></tr>
+          <tr><td><code>ki</code></td><td>Ki</td><td>0.05</td></tr>
+          <tr><td><code>kd</code></td><td>Kd</td><td>25.0</td></tr>
+          <tr><td><code>speed</code></td><td>speedPercentage</td><td>35</td></tr>
+          <tr><td><code>turnDelay</code></td><td>turnDelay</td><td>250</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>الكود</h3>
+<pre><span class="n">Kp</span> = preferences.<span class="n">getFloat</span>(<span class="s">"kp"</span>, <span class="v">35.0</span>);
+<span class="n">Ki</span> = preferences.<span class="n">getFloat</span>(<span class="s">"ki"</span>, <span class="v">0.05</span>);
+<span class="n">Kd</span> = preferences.<span class="n">getFloat</span>(<span class="s">"kd"</span>, <span class="v">25.0</span>);
+<span class="n">speedPercentage</span> = preferences.<span class="n">getInt</span>(<span class="s">"speed"</span>, <span class="v">35</span>);
+<span class="n">turnDelay</span> = preferences.<span class="n">getInt</span>(<span class="s">"turnDelay"</span>, <span class="v">250</span>);</pre>
+      <p style="margin-top:9px"><span class="badge builtin">Preferences.getFloat / getInt</span></p>
+    </div>
+  </div>
+
+  <div class="warn">
+    <b>⚠️ تعارض القيم:</b> القيم هنا (35 / 0.05 / 25 / 35 / 250) <b>تختلف</b> عن <code class="inl">resetPID()</code> (40 / 0.05 / 45 / 30 / 260) وعن المتغيرات العامة. مسجّل في <code class="inl">modifications.md</code>.
+  </div>
+</section>
+
+<!-- ================= 4 ================= -->
+<section class="slide" data-path="setup() → move()">
+  <div class="s-head">
+    <div class="s-num">04</div>
+    <div class="s-title"><h2><code>move()</code></h2><p>طبقة وسيطة: تحوّل «اتجاه» إلى سرعتين للعجلتين.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>حساب السرعة الأساسية</h3>
+<pre><span class="k">int</span> currentSpeed =
+  (direction == STOP) ? <span class="v">0</span>
+                      : (<span class="v">255</span> * speedPercentage / <span class="v">100</span>);</pre>
+      <p style="margin-top:9px">مثال عند 30% → <code class="inl">255 × 30 / 100 = 76</code></p>
+    </div>
+    <div class="card">
+      <h3>جدول الاتجاهات <span class="badge custom">enum Movement</span></h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>الاتجاه</th><th>يسار</th><th>يمين</th><th>النتيجة</th></tr></thead>
+        <tbody>
+          <tr><td><code>FORWARD</code></td><td>+</td><td>+</td><td>أمام</td></tr>
+          <tr><td><code>BACKWARD</code></td><td>−</td><td>−</td><td>خلف</td></tr>
+          <tr><td><code>LEFT</code></td><td>0</td><td>+</td><td>لف شمال بالمحور</td></tr>
+          <tr><td><code>RIGHT</code></td><td>+</td><td>0</td><td>لف يمين بالمحور</td></tr>
+          <tr><td><code>ROTATE_CW</code></td><td>+</td><td>−</td><td>دوران في المكان</td></tr>
+          <tr><td><code>ROTATE_CCW</code></td><td>−</td><td>+</td><td>دوران عكسي</td></tr>
+          <tr><td><code>STOP</code></td><td>0</td><td>0</td><td>توقف</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>ملاحظة:</b> <code class="inl">LEFT</code> / <code class="inl">RIGHT</code> ليستا انحرافاً ناعماً، بل <b>لفّاً بعجلة واحدة</b> — مناسب للتحكم اليدوي.
+  </div>
+</section>
+
+<!-- ================= 5 ================= -->
+<section class="slide" data-path="move() → setMotorSpeeds()">
+  <div class="s-head">
+    <div class="s-num">05</div>
+    <div class="s-title"><h2><code>setMotorSpeeds()</code></h2><p>تحويل (سرعة يسار، سرعة يمين) إلى إشارات درايفر L298N.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>① تحديد الاتجاه من الإشارة</h3>
+<pre><span class="c">// المحرك الأيسر</span>
+<span class="k">if</span> (leftSpeed &gt;= <span class="v">0</span>) {
+  <span class="n">digitalWrite</span>(IN1, HIGH);
+  <span class="n">digitalWrite</span>(IN2, LOW);
+} <span class="k">else</span> {
+  <span class="n">digitalWrite</span>(IN1, LOW);
+  <span class="n">digitalWrite</span>(IN2, HIGH);
+  leftSpeed = -leftSpeed;
+}</pre>
+      <p style="margin-top:8px"><span class="badge builtin">digitalWrite</span></p>
+    </div>
+    <div class="card">
+      <h3>② السرعة عبر PWM</h3>
+<pre><span class="n">analogWrite</span>(ENA, leftSpeed);
+<span class="n">analogWrite</span>(ENB, rightSpeed);</pre>
+      <div class="tbl-wrap" style="margin-top:10px"><table>
+        <thead><tr><th>IN1</th><th>IN2</th><th>الحركة</th></tr></thead>
+        <tbody>
+          <tr><td>HIGH</td><td>LOW</td><td>أمام</td></tr>
+          <tr><td>LOW</td><td>HIGH</td><td>خلف</td></tr>
+          <tr><td>LOW</td><td>LOW</td><td>توقف حر</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>الفكرة:</b> الإشارة (<code class="inl">+ / −</code>) تحدّد <b>الاتجاه</b>، والقيمة المطلقة تحدّد <b>السرعة</b> (0–255). نفس المنطق للمحرك الأيمن عبر <code class="inl">IN3 / IN4 / ENB</code>.
+  </div>
+</section>
+
+<!-- ================= 6 ================= -->
+<section class="slide" data-path="setup() → beep()">
+  <div class="s-head">
+    <div class="s-num">06</div>
+    <div class="s-title"><h2><code>beep()</code></h2><p>صوت قصير على البازر — بسيطة لكنها <b>حاجزة</b>.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>الكود</h3>
+<pre><span class="k">void</span> <span class="n">beep</span>(<span class="k">int</span> duration) {
+  <span class="n">digitalWrite</span>(BUZZER_PIN, HIGH);
+  <span class="n">delay</span>(duration);
+  <span class="n">digitalWrite</span>(BUZZER_PIN, LOW);
+}</pre>
+    </div>
+    <div class="card">
+      <h3>الاستخدامات</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>الحدث</th><th>المدة</th></tr></thead>
+        <tbody>
+          <tr><td>بدء التشغيل</td><td>200ms ×2</td></tr>
+          <tr><td>بدء الجولة</td><td>300ms</td></tr>
+          <tr><td>إيقاف / مقاطعة</td><td>100ms</td></tr>
+          <tr><td>إنهاء المسار</td><td>200ms ×3</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="warn">
+    <b>⚠️ حاجزة (Blocking):</b> <code class="inl">delay()</code> توقف المعالج — أثناء الصوت لا يستجيب السيرفر. مقبولة للمدد القصيرة.
+  </div>
+</section>
+
+<!-- ================= 7 ================= -->
+<section class="slide" data-path="setup() → startServer()">
+  <div class="s-head">
+    <div class="s-num">07</div>
+    <div class="s-title"><h2><code>startServer()</code></h2><p>تشغيل نقطة اتصال WiFi + نظام الملفات + تسجيل كل المسارات.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>① التهيئة</h3>
+      <ul>
+        <li><code class="inl">LittleFS.begin()</code> — تركيب نظام الملفات + طباعة الملفات.</li>
+        <li><code class="inl">WiFi.softAP("Sonic", NULL)</code> — شبكة مفتوحة.</li>
+        <li>عنوان الجهاز: <b>192.168.4.1</b></li>
+        <li>ملفات ثابتة: <code class="inl">index.html · manual.html · logo.svg · background.svg · Electrolise.ttf · icon.png</code></li>
+      </ul>
+      <p style="margin-top:8px"><span class="badge builtin">WiFi.softAP · LittleFS · serveStatic</span></p>
+    </div>
+    <div class="card">
+      <h3>② جدول المسارات</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>المسار</th><th>المعالج</th><th>النوع</th></tr></thead>
+        <tbody>
+          <tr><td><code>/</code></td><td>handleRoot → 302</td><td>تحويل</td></tr>
+          <tr><td><code>/manual</code></td><td>handleManualControl → 302</td><td>تحويل</td></tr>
+          <tr><td><code>/startstop</code></td><td>handleStartStop</td><td>JSON</td></tr>
+          <tr><td><code>/status</code></td><td>handleStatus</td><td>JSON</td></tr>
+          <tr><td><code>/setpid</code> · <code>/resetpid</code></td><td>ضبط الإعدادات</td><td>JSON / نص</td></tr>
+          <tr><td><code>/syncmode</code></td><td>setMode</td><td>نص</td></tr>
+          <tr><td><code>/forward</code> … <code>/ccw</code> · <code>/horn</code></td><td>تحكم يدوي</td><td>فاضي</td></tr>
+          <tr><td><code>/turnRight90</code> · <code>/turnLeft90</code></td><td>لف 90°</td><td>فاضي</td></tr>
+          <tr><td><code>/clearhistory</code></td><td>POST فقط</td><td>JSON</td></tr>
+          <tr><td><code>/speed</code></td><td>handleSpeed</td><td>مكرر/غير مستخدم</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 8 ================= -->
+<section class="slide" data-path="loop()">
+  <div class="s-head">
+    <div class="s-num">08</div>
+    <div class="s-title"><h2><code>loop()</code></h2><p>الحلقة الرئيسية — تُكرَّر بلا توقف، مع <code>delay(5)</code> لتجنّب Watchdog.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>التدفق</h3>
+      <div class="flow" style="align-items:stretch">
+        <div class="node">server.handleClient()</div>
+        <div class="arrow">↓</div>
+        <div class="node cy">updateLedStatus()</div>
+        <div class="arrow">↓</div>
+        <div class="node cy">handleStartTrigger()</div>
+        <div class="arrow">↓</div>
+        <div class="node am">!manualMode && isRunning ؟</div>
+        <div class="arrow">↓ نعم</div>
+        <div class="node cy">FollowPathPID()</div>
+        <div class="arrow">↓</div>
+        <div class="node cy">updateStopwatch()</div>
+        <div class="arrow">↓</div>
+        <div class="node">delay(5)</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>ملاحظات</h3>
+      <ul>
+        <li><b>لا شيء يعمل تلقائياً</b> إلا لو التشغيل بدأ.</li>
+        <li>الشرط <code class="inl">!manualMode</code> يمنع تعارض اليدوي مع PID.</li>
+        <li>العدّاد يُحدَّث <b>فقط</b> أثناء التشغيل.</li>
+        <li><code class="inl">delay(5)</code> يمنح المعالج فرصة → لا Watchdog Reset.</li>
+        <li>كل طلبات الويب تُخدم داخل نفس الحلقة (Single-threaded).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 9 ================= -->
+<section class="slide" data-path="loop() → updateLedStatus()">
+  <div class="s-head">
+    <div class="s-num">09</div>
+    <div class="s-title"><h2><code>updateLedStatus()</code></h2><p>LED مدمج (GPIO 2) يعرض الحالة بنمط وميض مختلف.</p></div>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>الحالة</th><th>النمط</th><th>المعنى</th></tr></thead>
+      <tbody>
+        <tr><td><code>manualMode</code></td><td>وميض كل <b>500ms</b></td><td>تحكم يدوي</td></tr>
+        <tr><td><code>isRunning || status=="Running"</code></td><td>وميض سريع كل <b>200ms</b></td><td>جولة جارية</td></tr>
+        <tr><td><code>startScheduled</code></td><td>وميض سريع جداً (دورة 250ms)</td><td>انتظار 0.5s قبل البدء</td></tr>
+        <tr><td>غير ذلك</td><td><b>مطفأ</b></td><td>جاهز / متوقف</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note" style="margin-top:16px">
+    <b>الآلية:</b> <code class="inl">millis()</code> بدلاً من <code class="inl">delay()</code> — وميض <b>غير حاجز</b> لا يعطّل باقي الحلقة.
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>لماذا millis؟</h3><p>تسمح بتنفيذ مهام أخرى أثناء الانتظار، بينما <code class="inl">delay()</code> تجمّد كل شيء.</p></div>
+    <div class="card"><h3>ترتيب الأولوية</h3><p>يدوي ← تشغيل ← بدء معلّق ← إطفاء. أول شرط يتحقق يُنفَّذ فقط (<code class="inl">else if</code>).</p></div>
+  </div>
+</section>
+
+<!-- ================= 10 ================= -->
+<section class="slide" data-path="loop() → handleStartTrigger()">
+  <div class="s-head">
+    <div class="s-num">10</div>
+    <div class="s-title"><h2><code>handleStartTrigger()</code></h2><p>الزر الفيزيائي: بدء مؤجّل 0.5 ثانية + كشف الحافّتين.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>① البدء المؤجّل</h3>
+<pre><span class="k">if</span> (startScheduled &amp;&amp; !isRunning &amp;&amp; !manualMode
+    &amp;&amp; millis() - startScheduledTime &gt;= <span class="v">500</span>) {
+  startScheduled = <span class="k">false</span>;
+  <span class="n">startRobot</span>();
+}</pre>
+      <p style="margin-top:8px">يعطي فرصة لإبعاد اليد قبل انطلاق الروبوت.</p>
+    </div>
+    <div class="card">
+      <h3>② كشف الضغط والإفلات</h3>
+<pre><span class="c">// ضغط (Falling edge)</span>
+<span class="k">if</span> (<span class="n">digitalRead</span>(BUTTON_PIN) == LOW &amp;&amp; !buttonPressed) {
+  buttonPressed = <span class="k">true</span>;
+  currentTriggerMode = <span class="s">"button"</span>;
+  <span class="k">if</span> (isRunning)      <span class="n">stopRobot</span>();
+  <span class="k">else if</span> (!manualMode) startScheduled = <span class="k">true</span>;
+}
+<span class="c">// إفلات (Rising edge)</span>
+<span class="k">if</span> (<span class="n">digitalRead</span>(BUTTON_PIN) == HIGH &amp;&amp; buttonPressed)
+  buttonPressed = <span class="k">false</span>;</pre>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>Toggle:</b> الزر الواحد يبدأ ويوقف. في الوضع اليدوي <b>لا يبدأ</b> (<code class="inl">!manualMode</code>)، لكنه <b>يوقف</b> لو شغّال.
+  </div>
+</section>
+
+<!-- ================= 11 ================= -->
+<section class="slide" data-path="handleStartTrigger() → startRobot()">
+  <div class="s-head">
+    <div class="s-num">11</div>
+    <div class="s-title"><h2><code>startRobot()</code></h2><p>تهيئة حالة الجولة والانطلاق.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>ما تفعله بالترتيب</h3>
+      <ul>
+        <li><code class="inl">startTriggerMode = currentTriggerMode</code> — تسجيل المصدر.</li>
+        <li><code class="inl">interruptTriggerMode = ""</code> — تصفير المقاطعة.</li>
+        <li><code class="inl">stopwatchValue = 0</code> + <code class="inl">startTime = millis()</code>.</li>
+        <li><code class="inl">shouldStoreStopwatch = true</code> — اسمح بتسجيل الجولة.</li>
+        <li><code class="inl">isRunning = true</code> + <code class="inl">robotStatus = "Running"</code>.</li>
+        <li><code class="inl">digitalWrite(LED_PIN, HIGH)</code>.</li>
+        <li><code class="inl">beep(300)</code>.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>الحالة بعد التنفيذ</h3>
+      <div class="flow" style="align-items:stretch">
+        <div class="node gr">robotStatus = "Running"</div>
+        <div class="arrow">↓</div>
+        <div class="node">loop() يبدأ تنفيذ FollowPathPID()</div>
+        <div class="arrow">↓</div>
+        <div class="node cy">المؤقّت يعمل</div>
+      </div>
+      <p style="margin-top:10px"><span class="badge warn">لا توجد حماية «هل الروبوت على المسار؟» هنا</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 12 ================= -->
+<section class="slide" data-path="handleStartTrigger() → stopRobot()">
+  <div class="s-head">
+    <div class="s-num">12</div>
+    <div class="s-title"><h2><code>stopRobot()</code></h2><p>إيقاف + تحديد نوع المقاطعة + تسجيل الجولة.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>① استثناء مهم</h3>
+<pre><span class="k">if</span> (robotStatus == <span class="s">"Finished 🏁"</span>) {
+  isRunning = <span class="k">false</span>; move(STOP);
+  <span class="n">digitalWrite</span>(LED_PIN, LOW);
+  <span class="k">return</span>;   <span class="c">// لا تسجيل مزدوج</span>
+}</pre>
+      <p style="margin-top:8px">يمنع تسجيل جولة ثانية بعد إنهاء المسار.</p>
+    </div>
+    <div class="card">
+      <h3>② تحديد رسالة الحالة</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>interrupt</th><th>start</th><th>الرسالة</th></tr></thead>
+        <tbody>
+          <tr><td>button</td><td>web</td><td>Button Interrupted 🛑</td></tr>
+          <tr><td>web</td><td>button</td><td>Web Interrupted 🖥️</td></tr>
+          <tr><td>button</td><td>button</td><td>Button Interrupted 🛑</td></tr>
+          <tr><td>web</td><td>web</td><td>Web Interrupted 🖥️</td></tr>
+          <tr><td>فارغ</td><td>—</td><td>Button Interrupted 🛑</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card">
+      <h3>③ التسجيل</h3>
+<pre><span class="k">if</span> (shouldStoreStopwatch &amp;&amp; robotStatus != <span class="s">"Finished 🏁"</span>) {
+  elapsedTime = <span class="n">millis</span>() - startTime;
+  stopwatchValue = elapsedTime;
+  <span class="n">addRoundToHistory</span>(stopStatus, startTriggerMode);
+}
+shouldStoreStopwatch = <span class="k">false</span>;
+robotStatus = stopStatus;
+interruptTriggerMode = <span class="s">""</span>;</pre>
+    </div>
+    <div class="card">
+      <h3>④ ⚠️ لا تصفير PID</h3>
+      <p><code class="inl">integral</code> و<code class="inl">lastError</code> <b>لا يُصفَّران</b> — على عكس <code class="inl">endProcedure()</code>.</p>
+      <p style="margin-top:8px">النتيجة: قيم قديمة تنتقل للجولة التالية. <span class="badge warn">معتمد للإصلاح — تعديل #8</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 13 ================= -->
+<section class="slide" data-path="loop() → FollowPathPID()">
+  <div class="s-head">
+    <div class="s-num">13</div>
+    <div class="s-title"><h2><code>FollowPathPID()</code></h2><p>قلب المشروع: خطأ مرجّح ← PID ← سرعتان ← تصحيح.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>① الأوزان (5 حساسات)</h3>
+<pre><span class="k">int</span> weights[<span class="v">5</span>] = { -<span class="v">1</span>, -<span class="v">2</span>, <span class="v">0</span>, <span class="v">2</span>, <span class="v">1</span> };</pre>
+      <div class="tbl-wrap" style="margin-top:9px"><table>
+        <thead><tr><th>الحساس</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th></tr></thead>
+        <tbody><tr><td>الوزن</td><td>−1</td><td><b>−2</b></td><td>0</td><td><b>+2</b></td><td>+1</td></tr></tbody>
+      </table></div>
+      <p style="margin-top:8px">الحساسات الداخلية أقوى → تصحيح أسرع قرب المنتصف.</p>
+    </div>
+    <div class="card">
+      <h3>② حساب الخطأ</h3>
+<pre>count = <span class="v">0</span>;
+<span class="k">for</span> (<span class="k">int</span> i = <span class="v">0</span>; i &lt; <span class="v">5</span>; i++) {
+  <span class="k">if</span> (sensorReadings[i] == HIGH) {
+    error += weights[i];
+    count++;
+  }
+}</pre>
+      <ul style="margin-top:8px">
+        <li><b>error &gt; 0</b> → الخط يمين → يلف يمين</li>
+        <li><b>error &lt; 0</b> → الخط شمال → يلف شمال</li>
+        <li><b>error = 0</b> → في المنتصف</li>
+        <li><b>count = 0</b> → لا خط ظاهر</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card">
+      <h3>③ التسلسل</h3>
+      <div class="flow" style="align-items:stretch">
+        <div class="node cy">readSensors()</div><div class="arrow">↓</div>
+        <div class="node">حساب error / count</div><div class="arrow">↓</div>
+        <div class="node">PID → correction</div><div class="arrow">↓</div>
+        <div class="node">speedL / speedR</div><div class="arrow">↓</div>
+        <div class="node am">count == 5 ؟</div><div class="arrow">↓ نعم</div>
+        <div class="node rd">move(STOP) → endProcedure()</div><div class="arrow">↓ لا</div>
+        <div class="node gr">setMotorSpeeds() → detect90()</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>④ الحمايات</h3>
+      <ul>
+        <li><code class="inl">if (manualMode) return;</code> — تعطيل كامل.</li>
+        <li><code class="inl">if (isRunning)</code> — لا عمل إن لم تبدأ الجولة.</li>
+        <li><code class="inl">count == 5</code> — كل الحساسات على الأسود = نهاية المسار.</li>
+        <li><code class="inl">return</code> بعد <code class="inl">endProcedure()</code> — خروج فوري.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 14 ================= -->
+<section class="slide" data-path="FollowPathPID() → حساب PID">
+  <div class="s-head">
+    <div class="s-num">14</div>
+    <div class="s-title"><h2>حساب PID</h2><p>ثلاثة حدود: تناسبي + تكاملي + تفاضلي.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>الكود</h3>
+<pre>integral += error;
+integral = <span class="n">constrain</span>(integral, -Imax, Imax);   <span class="c">// ±50</span>
+
+<span class="k">float</span> derivative = error - lastError;
+
+correction = Kp * error
+           + Ki * integral
+           + Kd * derivative;
+
+lastError = error;</pre>
+      <p style="margin-top:8px"><span class="badge builtin">constrain</span></p>
+    </div>
+    <div class="card">
+      <h3>الحدود الثلاثة</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>الحد</th><th>المعنى</th><th>التأثير</th></tr></thead>
+        <tbody>
+          <tr><td><b>P</b> = Kp·e</td><td>حجم الانحراف الآن</td><td>رد فعل فوري</td></tr>
+          <tr><td><b>I</b> = Ki·Σe</td><td>تراكم الانحراف</td><td>يزيل الخطأ المستمر</td></tr>
+          <tr><td><b>D</b> = Kd·Δe</td><td>سرعة تغيّر الانحراف</td><td>يخفّف التذبذب</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:9px"><b>القيم الافتراضية:</b> Kp=35 · Ki=0.05 · Kd=25</p>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>Windup:</b> حدّ <code class="inl">Imax = 50</code> يمنع تضخّم الحد التكاملي عند بقاء الخطأ في اتجاه واحد طويلاً.
+  </div>
+</section>
+
+<!-- ================= 15 ================= -->
+<section class="slide" data-path="FollowPathPID() → سرعات الموتور">
+  <div class="s-head">
+    <div class="s-num">15</div>
+    <div class="s-title"><h2>تحويل التصحيح إلى سرعات</h2><p>التصحيح يُضاف لعجلة ويُطرح من الأخرى.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>الكود</h3>
+<pre><span class="k">int</span> base = <span class="v">255</span> * speedPercentage / <span class="v">100</span>;
+
+<span class="k">int</span> speedL = <span class="n">constrain</span>(base - correction, -<span class="v">255</span>, <span class="v">255</span>);
+<span class="k">int</span> speedR = <span class="n">constrain</span>(base + correction, -<span class="v">255</span>, <span class="v">255</span>);</pre>
+    </div>
+    <div class="card">
+      <h3>المنطق</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>الحالة</th><th>يسار</th><th>يمين</th><th>النتيجة</th></tr></thead>
+        <tbody>
+          <tr><td>error = 0</td><td>base</td><td>base</td><td>مستقيم</td></tr>
+          <tr><td>error &gt; 0 (يمين)</td><td>base − c</td><td>base + c</td><td>لف يمين</td></tr>
+          <tr><td>error &lt; 0 (شمال)</td><td>base − c</td><td>base + c</td><td>لف شمال</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:9px">كلمة <code class="inl">constrain</code> تضمن البقاء بين −255 و+255 (الاتجاه من الإشارة).</p>
+    </div>
+  </div>
+
+  <div class="warn">
+    <b>⚠️ نهاية المسار:</b> لو <code class="inl">count == 5</code> → <code class="inl">move(STOP)</code> + <code class="inl">endProcedure()</code> + <code class="inl">return</code> — قبل تنفيذ السرعات.
+  </div>
+</section>
+
+<!-- ================= 16 ================= -->
+<section class="slide" data-path="FollowPathPID() → readSensors()">
+  <div class="s-head">
+    <div class="s-num">16</div>
+    <div class="s-title"><h2><code>readSensors()</code></h2><p>قراءة الحساسات الخمسة في مصفوفة عامة.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>الكود</h3>
+<pre><span class="k">void</span> <span class="n">readSensors</span>() {
+  <span class="k">for</span> (<span class="k">int</span> i = <span class="v">0</span>; i &lt; <span class="v">5</span>; i++)
+    sensorReadings[i] = <span class="n">digitalRead</span>(sensorPins[i]);
+}</pre>
+      <p style="margin-top:9px"><span class="badge builtin">digitalRead</span></p>
+    </div>
+    <div class="card">
+      <h3>ترتيب الحساسات</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>i</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th></tr></thead>
+        <tbody>
+          <tr><td>الطرف</td><td>19</td><td>18</td><td>21</td><td>17</td><td>16</td></tr>
+          <tr><td>الموضع</td><td>أقصى يسار</td><td>يسار</td><td>وسط</td><td>يمين</td><td>أقصى يمين</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:9px"><code class="inl">HIGH</code> = أسود (خط) · <code class="inl">LOW</code> = أبيض.</p>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>تُنادى من:</b> <code class="inl">FollowPathPID</code> · <code class="inl">detect90</code> · <code class="inl">handleStartStop</code> · <code class="inl">turn*detection</code> · دوال اللف 90°.
+  </div>
+</section>
+
+<!-- ================= 17 ================= -->
+<section class="slide" data-path="FollowPathPID() → detect90()">
+  <div class="s-head">
+    <div class="s-num">17</div>
+    <div class="s-title"><h2><code>detect90()</code></h2><p>كشف المنعطف الحاد عند انتهاء الخط تحت الحساس الأوسط.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>منطق الكشف</h3>
+      <div class="flow" style="align-items:stretch">
+        <div class="node">readSensors()</div><div class="arrow">↓</div>
+        <div class="node am">sensorReadings[2] == HIGH ؟</div><div class="arrow">↓ نعم</div>
+        <div class="node">while (الوسط HIGH) → اقرأ</div><div class="arrow">↓</div>
+        <div class="node rd">كل الحساسات HIGH ؟ → endProcedure()</div><div class="arrow">↓ لا</div>
+        <div class="node">احسب highCount (غير الوسط)</div><div class="arrow">↓ ≥ 1</div>
+        <div class="node cy">تراجع للخلف ← مسح يمين/شمال</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>خطوات ما بعد الكشف</h3>
+      <ul>
+        <li><code class="inl">move(STOP)</code> + <code class="inl">delay(100)</code>.</li>
+        <li>رجوع خلفي: <code class="inl">setMotorSpeeds(-130,-130)</code> لمدة <code class="inl">turnDelay</code>.</li>
+        <li><code class="inl">move(STOP)</code> + <code class="inl">delay(100)</code>.</li>
+        <li><code class="inl">turnRightdetection()</code> ثم <code class="inl">turnLeftdetection()</code>.</li>
+      </ul>
+      <p style="margin-top:8px"><span class="badge warn">حلقة while بدون timeout</span></p>
+    </div>
+  </div>
+
+  <div class="warn">
+    <b>⚠️ خطر:</b> لو الحساس الأوسط بقي HIGH (خط مستمر) → الحلقة قد تطول. فيه فحص لنهاية المسار داخل الحلقة، لكن لا يوجد حد زمني عام.
+  </div>
+</section>
+
+<!-- ================= 18 ================= -->
+<section class="slide" data-path="detect90() → turn*detection()">
+  <div class="s-head">
+    <div class="s-num">18</div>
+    <div class="s-title"><h2><code>turnRightdetection()</code> / <code>turnLeftdetection()</code></h2><p>مسح دوراني بحثاً عن الخط بعد المنعطف.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>يمين — <code style="font-size:15px">turnRightdetection()</code></h3>
+<pre><span class="n">move</span>(STOP); <span class="n">delay</span>(<span class="v">50</span>);
+<span class="k">while</span> (sensorReadings[<span class="v">3</span>] == LOW
+    &amp;&amp; sensorReadings[<span class="v">4</span>] == LOW) {
+  <span class="n">setMotorSpeeds</span>(<span class="v">100</span>, <span class="v">0</span>);
+  <span class="n">readSensors</span>();
+  <span class="k">if</span> (sensorReadings[<span class="v">3</span>] == HIGH
+   || sensorReadings[<span class="v">4</span>] == HIGH) <span class="k">break</span>;
+  <span class="n">delay</span>(<span class="v">10</span>);
+}</pre>
+      <p style="margin-top:8px">يدور حتى يرى الحساسان 3 أو 4 الخط.</p>
+    </div>
+    <div class="card">
+      <h3>شمال — <code style="font-size:15px">turnLeftdetection()</code></h3>
+<pre><span class="n">move</span>(STOP); <span class="n">delay</span>(<span class="v">50</span>);
+<span class="k">while</span> (sensorReadings[<span class="v">0</span>] == LOW
+    &amp;&amp; sensorReadings[<span class="v">1</span>] == LOW) {
+  <span class="n">setMotorSpeeds</span>(<span class="v">0</span>, <span class="v">100</span>);
+  <span class="n">readSensors</span>();
+  <span class="k">if</span> (sensorReadings[<span class="v">0</span>] == HIGH
+   || sensorReadings[<span class="v">1</span>] == HIGH) <span class="k">break</span>;
+  <span class="n">delay</span>(<span class="v">10</span>);
+}</pre>
+      <p style="margin-top:8px">يدور حتى يرى الحساسان 0 أو 1 الخط.</p>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>ملاحظة</h3><p>السرعة ثابتة <code class="inl">100</code> ولا تعتمد على <code class="inl">speedPercentage</code> — مسح بطيء ومضبوط.</p></div>
+    <div class="card"><h3>⚠️</h3><p>لو الخط غير موجود → <b>حلقة لا نهائية</b> (لا timeout). مسجّل كملاحظة #2.</p></div>
+  </div>
+</section>
+
+<!-- ================= 19 ================= -->
+<section class="slide" data-path="FollowPathPID() → endProcedure()">
+  <div class="s-head">
+    <div class="s-num">19</div>
+    <div class="s-title"><h2><code>endProcedure()</code></h2><p>إنهاء الجولة عند الوصول لنهاية المسار.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>الخطوات الست</h3>
+      <div class="flow" style="align-items:stretch">
+        <div class="node rd">1. إيقاف فوري + LED LOW</div><div class="arrow">↓</div>
+        <div class="node cy">2. تصفير lastError + integral</div><div class="arrow">↓</div>
+        <div class="node">3. حساب الوقت + addRoundToHistory("Finished 🏁")</div><div class="arrow">↓</div>
+        <div class="node gr">4. robotStatus = "Finished 🏁"</div><div class="arrow">↓</div>
+        <div class="node">5. startScheduled = false · buttonPressed = false</div><div class="arrow">↓</div>
+        <div class="node am">6. beep(200) ×3</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>الحماية المهمة</h3>
+<pre><span class="k">if</span> (robotStatus == <span class="s">"Finished 🏁"</span>) <span class="k">return</span>;</pre>
+      <p style="margin-top:8px">تمنع تنفيذ الإنهاء مرتين (مثلاً من <code class="inl">FollowPathPID</code> و<code class="inl">detect90</code> معاً).</p>
+      <div class="good" style="margin-top:10px"><b>✅ هنا</b> يتم تصفير PID — بخلاف <code class="inl">stopRobot()</code>.</div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>الفرق:</b> <code class="inl">endProcedure</code> = نهاية طبيعية (إنهاء) · <code class="inl">stopRobot</code> = إيقاف يدوي/مقاطعة.
+  </div>
+</section>
+
+<!-- ================= 20 ================= -->
+<section class="slide" data-path="loop() → updateStopwatch()">
+  <div class="s-head">
+    <div class="s-num">20</div>
+    <div class="s-title"><h2><code>updateStopwatch()</code></h2><p>عدّاد زمني يُحدَّث كل 50ms أثناء التشغيل.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>الكود</h3>
+<pre><span class="k">void</span> <span class="n">updateStopwatch</span>() {
+  <span class="k">unsigned long</span> now = <span class="n">millis</span>();
+  <span class="k">if</span> (now - lastStopwatchUpdate &gt;= <span class="v">50</span>) {
+    stopwatchValue = now - startTime;
+    lastStopwatchUpdate = now;
+  }
+}</pre>
+      <p style="margin-top:9px">الفاصل: <code class="inl">stopwatchUpdateInterval = 50</code>.</p>
+    </div>
+    <div class="card">
+      <h3>لماذا لا نحدّث كل دورة؟</h3>
+      <ul>
+        <li>تقليل العمليات وضغط الـ JSON.</li>
+        <li>دقة 50ms كافية للعرض (سنتيمتر من الثانية = 10ms تقريباً).</li>
+        <li>قيمة العداد تُقرأ بعد ذلك في <code class="inl">/status</code> و<code class="inl">addRoundToHistory</code>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="warn">
+    <b>⚠️</b> تُنادى فقط عند <code class="inl">!manualMode && isRunning</code> — لذلك يتوقف العدّاد عند الإيقاف، لكنه <b>لا يُصفَّر</b> إلا في <code class="inl">startRobot()</code>/<code class="inl">clearHistory()</code>.
+  </div>
+</section>
+
+<!-- ================= 21 ================= -->
+<section class="slide" data-path="addRoundToHistory() / clearHistory()">
+  <div class="s-head">
+    <div class="s-num">21</div>
+    <div class="s-title"><h2><code>addRoundToHistory()</code> / <code>clearHistory()</code></h2><p>سجل آخر 10 جولات — الأحدث أولاً.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>الإضافة</h3>
+<pre><span class="k">if</span> (stopwatchValue == <span class="v">0</span> &amp;&amp; status != <span class="s">"Finished 🏁"</span>) <span class="k">return</span>;
+
+<span class="k">if</span> (historyCount &gt;= <span class="v">10</span>) {
+  <span class="k">for</span> (<span class="k">int</span> i = <span class="v">9</span>; i &gt; <span class="v">0</span>; i--)
+    roundHistory[i] = roundHistory[i-<span class="v">1</span>];
+} <span class="k">else</span> {
+  <span class="k">for</span> (<span class="k">int</span> i = historyCount; i &gt; <span class="v">0</span>; i--)
+    roundHistory[i] = roundHistory[i-<span class="v">1</span>];
+  historyCount++;
+}
+roundHistory[<span class="v">0</span>] = newRecord;
+currentRound++;</pre>
+    </div>
+    <div class="card">
+      <h3>السلوك</h3>
+      <ul>
+        <li>السجل <b>محدود بـ 10</b> — الأقدم يُحذف.</li>
+        <li>الإزاحة تجعل <code class="inl">[0]</code> أحدث جولة.</li>
+        <li>تُتجاهل الجولة لو <code class="inl">stopwatchValue == 0</code> (لم تبدأ فعلياً).</li>
+        <li><code class="inl">currentRound++</code> بعد كل تسجيل.</li>
+      </ul>
+      <h3 style="margin-top:13px">clearHistory()</h3>
+      <ul>
+        <li><code class="inl">historyCount = 0</code> · <code class="inl">currentRound = 1</code>.</li>
+        <li>تصفير Trigger modes + stopwatch.</li>
+        <li><code class="inl">robotStatus = "Ready"</code>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 22 ================= -->
+<section class="slide" data-path="startServer() → handleStartStop()">
+  <div class="s-head">
+    <div class="s-num">22</div>
+    <div class="s-title"><h2><code>handleStartStop()</code></h2><p>زر البدء/الإيقاف من الويب — <code>/startstop</code>.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>المنطق</h3>
+      <div class="flow" style="align-items:stretch">
+        <div class="node cy">readSensors() + count</div><div class="arrow">↓</div>
+        <div class="node am">robotStatus == "Running" ؟</div>
+        <div class="arrow">↓ نعم / لا</div>
+        <div class="modes">
+          <div class="col">
+            <div class="node rd">نعم: إيقاف</div>
+            <div class="arrow">↓</div>
+            <div class="node" style="font-size:12px">interrupt="web"<br>stopRobot()<br>{"success":true}</div>
+          </div>
+          <div class="col">
+            <div class="node gr">لا: بدء</div>
+            <div class="arrow">↓</div>
+            <div class="node am" style="font-size:12px">count == 5 ؟<br>→ "Place robot on track first!"</div>
+            <div class="arrow">↓ لا</div>
+            <div class="node" style="font-size:12px">startRobot()<br>{"success":true}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>نقاط مهمة</h3>
+      <ul>
+        <li><b>Toggle</b> — مسار واحد للبدء والإيقاف.</li>
+        <li><b>حماية المسار:</b> كل الحساسات على الأسود → يرفض البدء.</li>
+        <li>يسجّل <code class="inl">startTrigger = "web"</code>.</li>
+        <li>البدء <b>فوري</b> (بخلاف الزر: 0.5s).</li>
+      </ul>
+      <p style="margin-top:9px"><span class="badge warn">لا يفحص manualMode</span></p>
+      <p style="margin-top:7px;font-size:12.5px;color:#c9d6ee">في الوضع اليدوي قد يمنح حالة "Running" بدون تشغيل فعلي.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 23 ================= -->
+<section class="slide" data-path="startServer() → handleStatus()">
+  <div class="s-head">
+    <div class="s-num">23</div>
+    <div class="s-title"><h2><code>handleStatus()</code></h2><p>تقرير شامل بصيغة JSON — الواجهة تستدعيه كل 300ms.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>الحقول</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>الحقل</th><th>المصدر</th></tr></thead>
+        <tbody>
+          <tr><td><code>startTrigger</code> · <code>currentTrigger</code></td><td>أوضاع التشغيل</td></tr>
+          <tr><td><code>status</code></td><td>robotStatus</td></tr>
+          <tr><td><code>color</code></td><td>statusColor <span class="badge warn">غير مستخدم</span></td></tr>
+          <tr><td><code>stopwatch</code></td><td>stopwatchValue</td></tr>
+          <tr><td><code>mode</code></td><td>manual / auto</td></tr>
+          <tr><td><code>kp · ki · kd</code></td><td>إعدادات PID</td></tr>
+          <tr><td><code>speed · turnDelay</code></td><td>الإعدادات</td></tr>
+          <tr><td><code>finalTime</code></td><td>فقط عند Finished 🏁</td></tr>
+          <tr><td><code>history[]</code></td><td>آخر 10 جولات</td></tr>
+          <tr><td><code>timestamp</code></td><td>millis()</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>مثال</h3>
+<pre>{
+  <span class="s">"startTrigger"</span>: <span class="s">"web"</span>,
+  <span class="s">"status"</span>: <span class="s">"Running"</span>,
+  <span class="s">"stopwatch"</span>: <span class="v">4321</span>,
+  <span class="s">"mode"</span>: <span class="s">"auto"</span>,
+  <span class="s">"kp"</span>: <span class="v">35.0</span>,
+  <span class="s">"speed"</span>: <span class="v">35</span>,
+  <span class="s">"history"</span>: [ ... ],
+  <span class="s">"timestamp"</span>: <span class="v">98765</span>
+}</pre>
+      <p style="margin-top:8px">تُبنى يدوياً بـ <code class="inl">String</code> (بدون ArduinoJson).</p>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>الواجهة:</b> <code class="inl">fetch("/status?t=" + Date.now())</code> — إضافة <code class="inl">?t=</code> لمنع تخزين المتصفح للرد.
+  </div>
+</section>
+
+<!-- ================= 24 ================= -->
+<section class="slide" data-path="startServer() → handleSetPID() / resetPID()">
+  <div class="s-head">
+    <div class="s-num">24</div>
+    <div class="s-title"><h2><code>handleSetPID()</code> / <code>resetPID()</code></h2><p>ضبط الإعدادات وحفظها — وإرجاع الافتراضي.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3><code style="font-size:16px">handleSetPID()</code></h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>المعامل</th><th>الحصر</th><th>يُحفظ؟</th></tr></thead>
+        <tbody>
+          <tr><td><code>speed</code></td><td>10–100</td><td>✅</td></tr>
+          <tr><td><code>turnDelay</code></td><td>0–1000</td><td>✅</td></tr>
+          <tr><td><code>kp</code></td><td>❌ لا</td><td>✅</td></tr>
+          <tr><td><code>ki</code></td><td>❌ لا</td><td>✅</td></tr>
+          <tr><td><code>kd</code></td><td>❌ لا</td><td>✅</td></tr>
+        </tbody>
+      </table></div>
+      <ul style="margin-top:9px">
+        <li>يرد JSON بالقيم المحدّثة فقط.</li>
+        <li>لو مفيش معامل → <code class="inl">400</code>.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><code style="font-size:16px">resetPID()</code></h3>
+<pre>preferences.<span class="n">clear</span>();   <span class="c">// مسح الفلاش</span>
+Kp = <span class="v">40</span>;  Ki = <span class="v">0.05</span>;  Kd = <span class="v">45</span>;
+speedPercentage = <span class="v">30</span>;
+turnDelay = <span class="v">260</span>;
+<span class="n">server.send</span>(<span class="v">200</span>, <span class="s">"text/plain"</span>, <span class="s">"Reset to defaults"</span>);</pre>
+      <p style="margin-top:9px"><span class="badge bad">لا يحفظ القيم في الفلاش</span></p>
+      <p style="margin-top:6px;font-size:12.5px;color:#c9d6ee">بعد إعادة التشغيل تعود قيم <code class="inl">LoadDefaultValues</code> المختلفة.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 25 ================= -->
+<section class="slide" data-path="startServer() → setMode()">
+  <div class="s-head">
+    <div class="s-num">25</div>
+    <div class="s-title"><h2><code>setMode()</code></h2><p>تبديل الوضع — يُنادى من <code>/syncmode</code> عند فتح كل صفحة.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>المنطق</h3>
+<pre><span class="n">move</span>(STOP);          <span class="c">// دايماً</span>
+isRunning = <span class="k">false</span>;
+
+<span class="k">if</span> (mode == <span class="s">"manual"</span> &amp;&amp; !manualMode) {
+  manualMode = <span class="k">true</span>;
+  robotStatus = <span class="s">"Manual Mode"</span>;
+  startScheduled = <span class="k">false</span>;
+} <span class="k">else if</span> (mode == <span class="s">"auto"</span> &amp;&amp; manualMode) {
+  manualMode = <span class="k">false</span>;
+  robotStatus = <span class="s">"Ready"</span>;
+}</pre>
+    </div>
+    <div class="card">
+      <h3>جدول الحالات</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>mode</th><th>الحالي</th><th>النتيجة</th></tr></thead>
+        <tbody>
+          <tr><td>manual</td><td>auto</td><td>Manual Mode 🔵</td></tr>
+          <tr><td>manual</td><td>manual</td><td>لا تغيير + توقف</td></tr>
+          <tr><td>auto</td><td>manual</td><td>Ready 🟢</td></tr>
+          <tr><td>auto</td><td>auto</td><td>لا تغيير + توقف</td></tr>
+          <tr><td>غير صحيح</td><td>—</td><td>لا تغيير + توقف</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:9px"><span class="badge warn">تحديث صفحة index أثناء التشغيل يوقف الروبوت</span></p>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>لماذا؟</b> <code class="inl">index.html</code> ينادي <code class="inl">/syncmode?mode=auto</code> عند التحميل، و<code class="inl">manual.html</code> ينادي <code class="inl">?mode=manual</code>.
+  </div>
+</section>
+
+<!-- ================= 26 ================= -->
+<section class="slide" data-path="startServer() → Manual routes">
+  <div class="s-head">
+    <div class="s-num">26</div>
+    <div class="s-title"><h2>المسارات اليدوية</h2><p>أوامر مباشرة للمحركات — معظمها محمي بـ <code>manualMode</code>.</p></div>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>المسار</th><th>الاستدعاء</th><th>يدوي فقط؟</th><th>ملاحظة</th></tr></thead>
+      <tbody>
+        <tr><td><code>/forward</code> · <code>/backward</code></td><td><code>move(FORWARD/BACKWARD)</code></td><td>✅</td><td>يستمر حتى أمر آخر</td></tr>
+        <tr><td><code>/left</code> · <code>/right</code></td><td><code>move(LEFT/RIGHT)</code></td><td>✅</td><td>لف بعجلة واحدة</td></tr>
+        <tr><td><code>/cw</code> · <code>/ccw</code></td><td><code>move(ROTATE_*)</code></td><td>✅</td><td>دوران مستمر</td></tr>
+        <tr><td><code>/stop</code></td><td><code>move(STOP)</code></td><td>❌ <b>أي وضع</b></td><td>⚠️ لحظي — لا يوقف isRunning</td></tr>
+        <tr><td><code>/turnRight90</code> · <code>/turnLeft90</code></td><td>لف ثابت 130 PWM</td><td>✅</td><td>⚠️ بدون رد لو مش يدوي</td></tr>
+        <tr><td><code>/horn?state=on|off</code></td><td>BUZZER مباشرة</td><td>❌</td><td>غير حاجز</td></tr>
+        <tr><td><code>/clearhistory</code></td><td><code>clearHistory()</code></td><td>❌</td><td>POST فقط</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card">
+      <h3>الواجهة اليدوية</h3>
+      <ul>
+        <li>ضغط مستمر → تكرار الأمر كل 100ms.</li>
+        <li>إفلات → <code class="inl">/stop</code>.</li>
+        <li>وضع 90° → أمر واحد لكل ضغطة.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>اللف 90°</h3>
+      <ul>
+        <li><code class="inl">move(STOP)</code> → <code class="inl">delay(50)</code></li>
+        <li><code class="inl">setMotorSpeeds(±130)</code> → <code class="inl">delay(turnDelay)</code></li>
+        <li><code class="inl">readSensors()</code> → توقف</li>
+        <li>⏱️ حاجز ~350ms</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 27 ================= -->
+<section class="slide" data-path="Full Flowchart">
+  <div class="s-head">
+    <div class="s-num">27</div>
+    <div class="s-title"><h2>المخطط الكامل</h2><p>من التشغيل حتى نهاية الجولة.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>مسار الجولة</h3>
+      <div class="flow" style="align-items:stretch">
+        <div class="node">🔌 التشغيل → setup()</div><div class="arrow">↓</div>
+        <div class="node cy">loop() كل 5ms</div><div class="arrow">↓</div>
+        <div class="node am">مصدر البدء؟</div><div class="arrow">↓</div>
+        <div class="modes">
+          <div class="col"><div class="node" style="font-size:12px">🌐 /startstop<br>(فوري)</div></div>
+          <div class="col"><div class="node" style="font-size:12px">🖲️ زر<br>(+0.5s)</div></div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="node gr">startRobot() → Running</div><div class="arrow">↓</div>
+        <div class="node cy">FollowPathPID()</div><div class="arrow">↓</div>
+        <div class="node">قراءة → PID → محركات</div><div class="arrow">↓</div>
+        <div class="node am">نهاية المسار؟</div><div class="arrow">↓</div>
+        <div class="node rd">endProcedure() → Finished 🏁</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>مسار المقاطعة</h3>
+      <div class="flow" style="align-items:stretch">
+        <div class="node gr">Running</div><div class="arrow">↓</div>
+        <div class="node am">زر أو /startstop</div><div class="arrow">↓</div>
+        <div class="node">interruptTriggerMode = button/web</div><div class="arrow">↓</div>
+        <div class="node cy">stopRobot()</div><div class="arrow">↓</div>
+        <div class="node">اختيار رسالة المقاطعة</div><div class="arrow">↓</div>
+        <div class="node">addRoundToHistory()</div><div class="arrow">↓</div>
+        <div class="node rd">Interrupted 🛑 / 🖥️</div>
+      </div>
+      <div class="note" style="margin-top:10px">
+        <b>سجل الجولات:</b> الأحدث أولاً — بحد أقصى 10 — ويُعرض في الواجهة كل 300ms.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 28 ================= -->
+<section class="slide" data-path="خريطة الملف">
+  <div class="s-head">
+    <div class="s-num">28</div>
+    <div class="s-title"><h2>خريطة الملف</h2><p>أين تجد كل جزء داخل <code>Control_Project_Final_Code.ino</code> (806 سطر).</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>الأسطر</th><th>المحتوى</th></tr></thead>
+        <tbody>
+          <tr><td>1–12</td><td>المكتبات + تعريف الأطراف</td></tr>
+          <tr><td>14–35</td><td>متغيرات PID والحالة <span class="badge bad">28–35 ميتة</span></td></tr>
+          <tr><td>36–54</td><td>حالة التشغيل والمؤقّت</td></tr>
+          <tr><td>55–63</td><td><code>enum Movement</code></td></tr>
+          <tr><td>65–74</td><td>سجل الجولات</td></tr>
+          <tr><td>79–116</td><td><code>FollowPathPID()</code></td></tr>
+          <tr><td>117–167</td><td><code>detect90()</code></td></tr>
+          <tr><td>170–200</td><td><code>turn*detection()</code></td></tr>
+          <tr><td>201–219</td><td><code>turn*90()</code></td></tr>
+          <tr><td>220–226</td><td><code>updateStopwatch()</code></td></tr>
+          <tr><td>227–291</td><td><code>handleSetPID()</code></td></tr>
+          <tr><td>292–306</td><td><code>resetPID()</code></td></tr>
+          <tr><td>307–323</td><td><code>LoadDefaultValues()</code></td></tr>
+          <tr><td>325–340</td><td><code>startRobot()</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>الأسطر</th><th>المحتوى</th></tr></thead>
+        <tbody>
+          <tr><td>341–384</td><td><code>stopRobot()</code></td></tr>
+          <tr><td>385–415</td><td><code>endProcedure()</code></td></tr>
+          <tr><td>416–439</td><td><code>handleStartTrigger()</code></td></tr>
+          <tr><td>440–463</td><td><code>setMotorSpeeds()</code></td></tr>
+          <tr><td>464–490</td><td><code>move()</code></td></tr>
+          <tr><td>491–496</td><td><code>beep()</code></td></tr>
+          <tr><td>497–525</td><td><code>updateLedStatus()</code></td></tr>
+          <tr><td>526–550</td><td><code>addRoundToHistory()</code></td></tr>
+          <tr><td>551–559</td><td><code>clearHistory()</code></td></tr>
+          <tr><td>561–595</td><td>handleRoot / handleManualControl / handleStartStop</td></tr>
+          <tr><td>596–608</td><td><code>readSensors()</code> + <code>handleSpeed()</code></td></tr>
+          <tr><td>609–639</td><td><code>handleStatus()</code></td></tr>
+          <tr><td>640–658</td><td><code>setMode()</code> + <code>handleNotFound()</code></td></tr>
+          <tr><td>659–766</td><td><code>startServer()</code></td></tr>
+          <tr><td>767–793</td><td><code>setup()</code></td></tr>
+          <tr><td>794–806</td><td><code>loop()</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="good" style="margin-top:14px">
+    <b>✅ تمت تغطية كل الدوال.</b> التعديلات المقترحة موثّقة في <code class="inl">modifications.md</code>، والخطة الكاملة في <code class="inl">tasks.md</code>.
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <button class="nav-btn" id="prevBtn">→ السابق</button>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
+    <div class="dots" id="dots"></div>
+    <div class="hint"><kbd>←</kbd> <kbd>→</kbd> للتنقل · <kbd>Home</kbd> / <kbd>End</kbd> للبداية والنهاية</div>
+  </div>
+  <button class="nav-btn" id="nextBtn">التالي ←</button>
+</footer>
+
+<script>
+(function(){
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const total = slides.length;
+  const counter = document.getElementById('counter');
+  const bar = document.getElementById('progressBar');
+  const crumb = document.getElementById('breadcrumb');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const dotsWrap = document.getElementById('dots');
+  let current = 0;
+
+  // dots
+  slides.forEach((_, i) => {
+    const d = document.createElement('i');
+    d.title = 'شريحة ' + (i+1);
+    d.addEventListener('click', () => go(i));
+    dotsWrap.appendChild(d);
+  });
+  const dots = Array.from(dotsWrap.children);
+
+  function renderCrumb(path){
+    crumb.innerHTML = '';
+    if(!path || !path.trim()) return;
+    const parts = path.split('→').map(s => s.trim()).filter(Boolean);
+    parts.forEach((p, i) => {
+      if(i > 0){
+        const sep = document.createElement('span');
+        sep.textContent = '→';
+        sep.style.color = '#3d5277';
+        crumb.appendChild(sep);
+      }
+      const el = document.createElement('span');
+      el.className = 'crumb' + (i === parts.length - 1 ? ' last' : '');
+      el.textContent = p;
+      crumb.appendChild(el);
+    });
+  }
+
+  function go(n){
+    if(n < 0) n = 0;
+    if(n > total - 1) n = total - 1;
+    slides[current].classList.remove('active');
+    current = n;
+    slides[current].classList.add('active');
+    slides[current].scrollTop = 0;
+
+    counter.textContent = (current + 1) + ' / ' + total;
+    bar.style.width = (((current + 1) / total) * 100).toFixed(2) + '%';
+    dots.forEach((d, i) => d.classList.toggle('on', i === current));
+    prevBtn.disabled = current === 0;
+    nextBtn.disabled = current === total - 1;
+
+    renderCrumb(slides[current].dataset.path || '');
+
+    try { history.replaceState(null, '', '#s' + (current + 1)); } catch(e){}
+  }
+
+  prevBtn.addEventListener('click', () => go(current - 1));
+  nextBtn.addEventListener('click', () => go(current + 1));
+
+  // chart links
+  document.querySelectorAll('[data-goto]').forEach(el => {
+    el.addEventListener('click', () => go(parseInt(el.dataset.goto, 10) - 1));
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'ArrowLeft' || e.key === 'PageDown' || e.key === ' '){
+      e.preventDefault(); go(current + 1);
+    } else if(e.key === 'ArrowRight' || e.key === 'PageUp'){
+      e.preventDefault(); go(current - 1);
+    } else if(e.key === 'Home'){
+      e.preventDefault(); go(0);
+    } else if(e.key === 'End'){
+      e.preventDefault(); go(total - 1);
+    }
+  });
+
+  // swipe
+  let tx = 0, ty = 0;
+  document.addEventListener('touchstart', e => {
+    tx = e.changedTouches[0].clientX; ty = e.changedTouches[0].clientY;
+  }, {passive:true});
+  document.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - tx;
+    const dy = e.changedTouches[0].clientY - ty;
+    if(Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy)){
+      go(current + (dx > 0 ? -1 : 1)); // RTL: swipe right = prev
+    }
+  }, {passive:true});
+
+  // init from hash
+  const m = location.hash.match(/^#s(\d+)$/);
+  go(m ? Math.min(parseInt(m[1], 10) - 1, total - 1) : 0);
+})();
+</script>
+</body>
+</html>

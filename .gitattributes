@@ -1,0 +1,18 @@
+# سلوك الأسطر — يمنع فوضى CRLF/LF في diffs
+* text=auto
+
+# ملفات الكود: LF دايماً
+*.ino text eol=lf
+*.h   text eol=lf
+*.cpp text eol=lf
+*.md  text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js  text eol=lf
+*.svg text eol=lf
+
+# ملفات ثنائية — لا تُعدّل إطلاقاً
+*.pdf binary
+*.png binary
+*.jpg binary
+*.ttf binary

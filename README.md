@@ -1,5 +1,7 @@
-All the Project Files are here
+يمكنك تنزيل ملفات المشروع والاستمتاع بقراءة الكتيب
 
-You can Download Them By Pressing Code then Download As Zip
-
-Enjoy Your Experience !!
+هذا تفرع من المشروع الاصلي: https://github.com/hexman1999/ALEXU-Automatic-Control-Project-2025
+ستجد بالمشروع الاصلي توثيقا ادق واكثر تفصيلا حيث يحوي:
+- المكونات والخوارزمية بشكل معمق
+- دليل المستخدم والتطبيق العملي بشكل مفصل
+يمكنك البحث على الإنترنت عن L298N Motor Driver manual لفهم الdriver module.
