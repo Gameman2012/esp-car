@@ -18,7 +18,8 @@ bool manualMode = false;
 int speedPercentage = 30;  // Default speed (30%)
 unsigned long lastStopwatchUpdate = 0;
 const unsigned long stopwatchUpdateInterval = 50;  // Update every 50ms
-String robotStatus = "";
+String robotStatus = "";         // للعرض فقط (للواجهة الأمامية عبر /status)
+RobotState robotState = READY;   // مصدر الحقيقة المنطقية للحالة
 String statusColor = "red";      // Default to red for stopped/interrupted states
 String currentTriggerMode = "";  // Empty initially
 int sensorReadings[5];
@@ -52,6 +53,17 @@ enum Movement {
   ROTATE_CW,
   ROTATE_CCW
 };
+
+// Robot state enum — مصدر الحقيقة المنطقية لحالة الروبوت
+enum RobotState {
+  READY,
+  RUNNING,
+  FINISHED,
+  INTERRUPTED,
+  MANUAL
+};
+RobotState robotState = READY;
+
 // Round history
 struct RoundRecord {
   int roundNumber;
@@ -338,6 +350,7 @@ void startRobot() {
   shouldStoreStopwatch = true;
 
   isRunning = true;
+  robotState = RUNNING;
   robotStatus = "Running";
   statusColor = "green";
 
@@ -345,7 +358,7 @@ void startRobot() {
   beep(300);
 }
 void stopRobot() {
-  if (robotStatus == "Finished 🏁") {
+  if (robotState == FINISHED) {
     isRunning = false;
     resetPIDState();
     move(STOP);
@@ -376,13 +389,14 @@ void stopRobot() {
   }
 
   // Only add to history if we have a valid run time
-  if (shouldStoreStopwatch && robotStatus != "Finished 🏁") {
+  if (shouldStoreStopwatch && robotState != FINISHED) {
     elapsedTime = millis() - startTime;
     stopwatchValue = elapsedTime;
     addRoundToHistory(stopStatus, startTriggerMode);
   }
 
   shouldStoreStopwatch = false;
+  robotState = INTERRUPTED;
   robotStatus = stopStatus;
   statusColor = "red";
   beep(100);
@@ -391,7 +405,7 @@ void stopRobot() {
   interruptTriggerMode = "";
 }
 void endProcedure() {
-  if (robotStatus == "Finished 🏁") return;
+  if (robotState == FINISHED) return;
 
   // 1. Immediately stop motors and disable running state
   isRunning = false;
@@ -408,6 +422,7 @@ void endProcedure() {
   addRoundToHistory("Finished 🏁", startTriggerMode);
 
   // 4. Update status (after stopping)
+  robotState = FINISHED;
   robotStatus = "Finished 🏁";
   statusColor = "green";
 
@@ -563,6 +578,7 @@ void clearHistory() {
   startTriggerMode = "";
   interruptTriggerMode = "";  // Reset interrupt
   stopwatchValue = 0;
+  robotState = READY;
   robotStatus = "Ready";
   Serial.println("History cleared");
 }
@@ -618,7 +634,7 @@ void handleStatus() {
   json += "\"speed\":" + String(speedPercentage) + ",";
   json += "\"turnDelay\":" + String(turnDelay) + ",";
   json += "\"currentTrigger\":\"" + currentTriggerMode + "\",";
-  if (robotStatus == "Finished 🏁") {
+  if (robotState == FINISHED) {
     json += "\"finalTime\":" + String(stopwatchValue) + ",";
   }
   json += "\"history\":[";
@@ -657,6 +673,7 @@ void setMode(String mode) {
       startScheduled = false;  // Cancel pending auto actions
     } else {  // changingToAuto
       manualMode = false;
+      robotState = READY;
       robotStatus = "Ready";
       statusColor = "green";
       Serial.println("Switched to auto mode");
@@ -772,6 +789,7 @@ void startServer() {
     if (manualMode) move(ROTATE_CCW);
     server.send(200);
   });
+  robotState = READY;
   robotStatus = "Ready";
   statusColor = "green";
   server.begin();
