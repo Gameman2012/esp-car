@@ -15,7 +15,7 @@ float Kp = 35, Ki = 0.05, Kd = 25;  // PID variables( Proportional gain / Integr
 
 // System variables
 bool manualMode = false;
-int speedPercentage = 30;  // Default speed (30%)
+int speedPercentage = 35;  // Default speed (35%)
 unsigned long lastStopwatchUpdate = 0;
 const unsigned long stopwatchUpdateInterval = 50;  // Update every 50ms
 String robotStatus = "";         // للعرض فقط (للواجهة الأمامية عبر /status)
@@ -298,12 +298,12 @@ void resetPID() {
   preferences.begin("robot-config", false);
   preferences.clear();  // Delete all saved settings
 
-  // Reset to defaults in memory and active variables
-  Kp = 40.0;
+  // Reset to defaults in memory and active variables — Unified defaults (LoadDefaultValues reference)
+  Kp = 35.0;
   Ki = 0.05;
-  Kd = 45.0;
-  speedPercentage = 30;
-  turnDelay = 260;
+  Kd = 25.0;
+  speedPercentage = 35;
+  turnDelay = 250;
 
   // حفظ القيم في Preferences حتى لا تعود للقديمة بعد إعادة الإقلاع
   preferences.putFloat("Kp", Kp);
