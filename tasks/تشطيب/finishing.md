@@ -49,12 +49,5 @@
 ---
 
 ## ج) Git
-
-| # | Commit | المحتوى |
-|---|--------|---------|
-| 0 | `chore: normalize line endings + docs` | `.gitattributes` + renormalize + `pdf&md` |
-| 1 | `refactor: apply approved fixes` | البنود 1–16 |
-| 2 | `refactor: reorder functions by call-graph DFS` | البند 17 |
-| 3 | `feat(ui): Arabize interface (RTL)` | البند 18 |
-| 4 | `docs: final documentation + application` | هذا الملف + التوثيق |
+موجودة في tasks.md
 

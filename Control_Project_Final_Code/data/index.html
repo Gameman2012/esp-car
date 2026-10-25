@@ -568,30 +568,8 @@ let isTimerRunning = false;
 let currentTriggerMode = "web";
 let lockedTriggerMode = "-";
 let lockedStatus = "Ready ✓";
-let speedSyncInterval;
 let pendingUpdates = {};
 let isUpdating = false;
-function startSpeedSync() {
-  // Clear existing interval if any
-  if (speedSyncInterval) clearInterval(speedSyncInterval);
-  
-  // Sync speed every 2 seconds
-  speedSyncInterval = setInterval(() => {
-    fetch("/status")
-      .then(response => response.json())
-      .then(data => {
-        if (data.speed) {
-          const newSpeed = parseInt(data.speed);
-          // Update slider only if different
-          if (parseInt(document.getElementById("speedSlider").value) !== newSpeed) {
-            document.getElementById("speedSlider").value = newSpeed;
-            document.getElementById("sliderValue").innerText = `Speed: ${newSpeed}%`;
-          }
-        }
-      })
-      .catch(console.error);
-  }, 2000);
-}
 
 // Helper Functions
 function setupSlider(sliderId, valueId) {
@@ -804,14 +782,6 @@ function updateStatusFromServer() {
 
 
 
-
-function updateTimerDisplay(milliseconds) {
-  const minutes = String(Math.floor((milliseconds % 3600000) / 60000)).padStart(2, '0');
-  const seconds = String(Math.floor((milliseconds % 60000) / 1000)).padStart(2, '0');
-  const centiseconds = String(Math.floor((milliseconds % 1000) / 10)).padStart(2, '0');
-  
-  document.getElementById("timer").innerText = `${minutes}:${seconds}.${centiseconds}`;
-}
 
 function startTimer() {
   if (isTimerRunning) return;
@@ -1085,7 +1055,6 @@ function initializePage() {
     }
   });
   statusUpdateInterval = setInterval(updateStatusFromServer, STATUS_POLL_INTERVAL);
-  startSpeedSync();
 
   // Set auto mode
   fetch("/syncmode?mode=auto").catch(console.error);
