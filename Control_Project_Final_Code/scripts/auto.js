@@ -8,7 +8,6 @@ const STATUS_POLL_INTERVAL = 300;     // 300ms for status updates
 // State variables
 let running = false;
 let statusUpdateInterval;
-let latestServerTime = 0;
 let lastStopwatchUpdate = 0;
 let currentValues = {
   speed: 35,
@@ -108,6 +107,7 @@ function sendUpdateImmediately(specificUpdate = null) {
 }
 
 function updateSliderValue(sliderId, value) {
+  const slider = document.getElementById(sliderId);
   const param = sliderId.replace('SliderModal', '').replace('Slider', '').toLowerCase();
   const valueDisplay = document.getElementById(sliderId.replace('Slider', 'Value'));
 
@@ -424,6 +424,7 @@ function resetToDefaults() {
 function clearHistory() {
   if (confirm("Clear all history?")) {
     fetch("/clearhistory", { method: 'POST' })
+      .catch(console.error);
   }
 }
 
