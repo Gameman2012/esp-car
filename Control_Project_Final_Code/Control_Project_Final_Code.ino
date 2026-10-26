@@ -312,6 +312,7 @@ void startServer() {
   server.serveStatic("/Electrolise.ttf", LittleFS, "/Electrolise.ttf");
   server.serveStatic("/logo.svg", LittleFS, "/logo.svg");
   server.serveStatic("/background.svg", LittleFS, "/background.svg");
+  server.serveStatic("/scripts/", LittleFS, "/scripts/");
 
   server.onNotFound(handleNotFound);
 
