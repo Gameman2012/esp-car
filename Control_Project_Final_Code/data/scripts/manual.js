@@ -30,7 +30,7 @@ function startSpeedSync() {
           // Update slider only if different
           if (parseInt(document.getElementById("speedSlider").value) !== newSpeed) {
             document.getElementById("speedSlider").value = newSpeed;
-            document.getElementById("sliderValue").innerText = `Speed: ${newSpeed}%`;
+            document.getElementById("sliderValue").innerText = `السرعة: ${newSpeed}%`;
           }
         }
       })
@@ -61,7 +61,7 @@ function adjustSpeed(change) {
 function updateSlider() {
   const slider = document.getElementById("speedSlider");
   const val = slider.value;
-  document.getElementById("sliderValue").innerText = `Speed: ${val}%`;
+  document.getElementById("sliderValue").innerText = `السرعة: ${val}%`;
   localStorage.setItem("speedValue", val);
   sendSpeed(); // Call sendSpeed immediately on change
 }
@@ -71,7 +71,7 @@ function sendSpeed() {
   fetch(`/setpid?speed=${val}`)
     .then(response => {
       if (!response.ok) throw new Error("Network response was not ok");
-      console.log("Speed updated successfully");
+      console.log("تم تحديث السرعة بنجاح");
     })
     .catch(error => {
       console.error("Error updating speed:", error);
@@ -360,7 +360,7 @@ function initializePage() {
   // Replace loadSpeedFromStorage() with:
   const storedSpeed = localStorage.getItem("speedValue") || 50;
   document.getElementById("speedSlider").value = storedSpeed;
-  document.getElementById("sliderValue").innerText = `Speed: ${storedSpeed}%`;
+  document.getElementById("sliderValue").innerText = `السرعة: ${storedSpeed}%`;
 
   // Rest of your existing initialization code...
   setManualMode();
@@ -390,7 +390,7 @@ function initializePage() {
       if (data.speed) {
         const speed = parseInt(data.speed);
         document.getElementById("speedSlider").value = speed;
-        document.getElementById("sliderValue").innerText = `Speed: ${speed}%`;
+        document.getElementById("sliderValue").innerText = `السرعة: ${speed}%`;
         localStorage.setItem("speedValue", speed);
       }
     })

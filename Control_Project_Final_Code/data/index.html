@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Web Control Panel</title>
+<title>لوحة تحكم ويب</title>
 <style>
 @font-face {
   font-family: 'Electrolise';
@@ -451,91 +451,91 @@ td.status-cell.interrupted {
   <div class="content-container">
 <div class="header-with-logo">
   <img src="/logo.svg" alt="Logo" class="logo-img">
-  <h1>Web Control Panel</h1>
+  <h1>لوحة تحكم ويب</h1>
   <img src="/background.svg" alt="Logo" class="secondary-logo">
 </div>
     <div class="button-group">
-      <button class="settings-button" onclick="openSettingsModal()">⚙️ Settings</button>
-      <button class="mode-switch-button" onclick="switchToManual()">🕹️ Manual Mode</button>
+      <button class="settings-button" onclick="openSettingsModal()">⚙️ الإعدادات</button>
+      <button class="mode-switch-button" onclick="switchToManual()">🕹️ وضع يدوي</button>
     </div>
 <div class="status-container">
   <table class="status-table">
     <tr>
-      <th>Status</th>
-      <th>Started by</th>
+      <th>الحالة</th>
+      <th>بدأ بواسطة</th>
     </tr>
     <tr>
-      <td><span id="status" class="status-value ready">READY ✓</span></td>
+      <td><span id="status" class="status-value ready">جاهز ✓</span></td>
       <td><span id="triggerMode" class="status-value">-</span></td>
     </tr>
   </table>
 </div>
     <div id="errorMessage"></div>
-    <button id="startStopButton" onclick="toggleRobot()">► START</button>
+    <button id="startStopButton" onclick="toggleRobot()">► تشغيل</button>
     <div id="timer">00:00:00</div>
     <div class="table-container">
       <table id="resultsTable">
         <thead>
           <tr>
-            <th style="width: 20%">Round</th>
-            <th style="width: 30%">Time Elapsed</th>
-            <th style="width: 25%">Trigger Mode</th>
-            <th style="width: 25%">Status</th>
+            <th style="width: 20%">الجولة</th>
+            <th style="width: 30%">الزمن</th>
+            <th style="width: 25%">مصدر البدء</th>
+            <th style="width: 25%">الحالة</th>
           </tr>
         </thead>
         <tbody id="resultsBody"></tbody>
       </table>
     </div>
     <div id="clearButtonContainer">
-      <button onclick="clearHistory()">Clear History 🗑️</button>
+      <button onclick="clearHistory()">مسح السجل 🗑️</button>
     </div>
 
 <!-- Settings Modal -->
 <div id="settingsModal" class="modal">
   <div class="modal-content">
     <div class="modal-header">
-      <h2 class="modal-title">Settings</h2>
+      <h2 class="modal-title">الإعدادات</h2>
       <span class="close" onclick="closeSettingsModal()">&times;</span>
     </div>
     <div class="slider-container">
-      <label for="speedSliderModal">Speed (%):</label>
+      <label for="speedSliderModal">السرعة (%):</label>
       <input type="range" id="speedSliderModal" min="30" max="100" value="35">
       <span id="speedValueModal">35%</span>
     </div>
     <div class="slider-container">
-      <label for="kpSlider">Kp (Proportional):</label>
+      <label for="kpSlider">Kp (تناسبي):</label>
       <input type="range" id="kpSlider" min="10" max="60" value="35" step="0.5">
       <span id="kpValue">35</span>
     </div>
 
     <div class="slider-container">
-      <label for="kiSlider">Ki (Integral):</label>
+      <label for="kiSlider">Ki (تكاملي):</label>
       <input type="range" id="kiSlider" min="0" max="1" value="0.05" step="0.01">
       <span id="kiValue">0.05</span>
     </div>
 
     <div class="slider-container">
-      <label for="kdSlider">Kd (Derivative):</label>
+      <label for="kdSlider">Kd (مشتق):</label>
       <input type="range" id="kdSlider" min="0" max="60" value="25" step="0.5">
       <span id="kdValue">25</span>
     </div>
 	<div class="slider-container">
-		<label for="turnDelaySlider">Reverse Delay (ms):</label>
+		<label for="turnDelaySlider">تأخير الرجوع (مللي ثانية):</label>
 		<input type="range" id="turnDelaySlider" min="0" max="1000" value="250" step="10">
 		<span id="turnDelayValue">250</span>
 	</div>
 <div class="modal-buttons" style="display: flex; justify-content: center; gap: 20px; margin-top: 20px;">
-      <button id="resetButton" onclick="resetToDefaults()">Reset to Defaults</button>
+      <button id="resetButton" onclick="resetToDefaults()">إعادة الضبط الافتراضي</button>
     </div>
 
-    <button id="showInfoButton" style="margin: 5px auto 20px auto;  padding: 12px; display: block;">ℹ️ Show Variable Info</button>
+    <button id="showInfoButton" style="margin: 5px auto 20px auto;  padding: 12px; display: block;">ℹ️ عرض معلومات المتغيرات</button>
 
     <div id="variableInfo" style="display: none; text-align: left; font-size: 14px; background: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 10px;">
-      <strong>Speed (%):</strong> Controls how fast the robot moves. Higher = faster.<br><br>
-	  <strong>Reverse Delay (ms):</strong> How long 90 degree reverse take (0-500ms).<br><br>
-      <strong>Kp (Proportional):</strong> Responds to current error. High = quicker correction, but may overshoot.<br><br>
-      <strong>Ki (Integral):</strong> Fixes cumulative error. High = persistent correction, but may cause drift.<br><br>
-      <strong>Kd (Derivative):</strong> Dampens the response. High = smoother control, but may slow reaction.
+      <strong>السرعة (%):</strong> تحدد مدى سرعة حركة الروبوت. كلما زادت القيمة، زادت السرعة.<br><br>
+	  <strong>تأخير الرجوع (مللي ثانية):</strong> المدة التي يستغرقها التراجع بزاوية 90 درجة (0-500 مللي ثانية).<br><br>
+      <strong>Kp (تناسبي):</strong> يستجيب للخطأ الحالي. القيمة العالية تعني تصحيح أسرع، ولكن قد يؤدي إلى تجاوز القيمة المطلوبة.<br><br>
+      <strong>Ki (تكاملي):</strong> يصحح الخطأ التراكمي. القيمة العالية تعني تصحيح مستمر، ولكن قد يسبب انحرافًا.<br><br>
+      <strong>Kd (مشتق):</strong> يخفف الاستجابة. القيمة العالية تعني تحكمًا أكثر سلاسة، ولكن قد يبطئ التفاعل.
 	  
     </div>
   </div>

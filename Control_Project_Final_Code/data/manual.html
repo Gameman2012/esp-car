@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Robot Manual Controller</title>
+  <title>وحدة التحكم اليدوي بالروبوت</title>
   <style>
     @font-face {
       font-family: 'Electrolise';
@@ -227,9 +227,9 @@
   <div class="content-container">
     <div class="header-container">
       <button class="mode-switch-button" onclick="setAutoMode()">
-        🚗<br>Auto<br>Mode
+        وضع تلقائي
       </button>
-      <h2>Manual Control<br>🕹️</h2>
+      <h2>تحكم يدوي<br>🕹️</h2>
       <div class="spacer"></div> <!-- This balances the layout -->
     </div>
     <div class="controls">
@@ -263,20 +263,20 @@
     <div class="turn-90-control" id="turn90Control">
       <label>
         <input type="checkbox" id="enable90Turn" checked onchange="toggle90TurnMode()">
-        <span id="turnModeText">90° Turn</span>
+        <span id="turnModeText">وضع 90°</span>
       </label>
     </div>
     <div class="horn-control">
       <button id="horn" onmousedown="activateHorn()" onmouseup="deactivateHorn()" ontouchstart="touchHorn(event, true)"
         ontouchend="touchHorn(event, false)">
-        🔊 Horn
+        🔊 بوق
       </button>
     </div>
 
     <div id="sliderContainer">
       <input type="range" id="speedSlider" min="30" max="100" value="50" oninput="updateSlider()"
         onkeydown="event.preventDefault()">
-      <div id="sliderValue">Speed: 50%</div>
+      <div id="sliderValue">السرعة: 50%</div>
     </div>
   </div>
 

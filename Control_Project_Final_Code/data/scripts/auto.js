@@ -84,7 +84,7 @@ function sendUpdateImmediately(specificUpdate = null) {
 
   fetch(`/setpid?${params.toString()}`)
     .then(response => {
-      if (!response.ok) throw new Error('Update failed');
+      if (!response.ok) throw new Error('فشل التحديث');
       return response.json();
     })
     .then(data => {
@@ -117,7 +117,7 @@ function updateSliderValue(sliderId, value) {
 
   fetch(`/setpid?${param}=${value}`)
     .then(response => {
-      if (!response.ok) throw new Error('Update failed');
+      if (!response.ok) throw new Error('فشل التحديث');
       valueDisplay.classList.remove('updated');
     })
     .catch(err => {
@@ -269,32 +269,32 @@ function updateStatusDisplay(data) {
   statusElement.className = "";
   const statusText = data.status.toLowerCase();
 
-  if (statusText.includes("running")) {
+  if (statusText.includes("يعمل")) {
     statusElement.className = "running";
-    statusElement.textContent = "Running 🚗💨";
-    triggerElement.textContent = data.startTrigger === "button" ? "🖲️ Pushbutton" : "🌐 Web UI";
-  } else if (statusText.includes("finished")) {
+    statusElement.textContent = "يعمل 🚗💨";
+    triggerElement.textContent = data.startTrigger === "button" ? "🖲️ زر التشغيل" : "🌐 واجهة الويب";
+  } else if (statusText.includes("انتهى")) {
     statusElement.className = "finished";
-    statusElement.textContent = "Finished 🏁";
-  } else if (statusText.includes("interrupted")) {
+    statusElement.textContent = "انتهى 🏁";
+  } else if (statusText.includes("متوقف")) {
     statusElement.className = "interrupted";
-    statusElement.textContent = "Interrupted ⚠️";
+    statusElement.textContent = "متوقف ⚠️";
   } else {
     statusElement.className = "ready";
-    statusElement.textContent = "Ready ✓";
+    statusElement.textContent = "جاهز ✓";
     triggerElement.textContent = "-";
   }
 }
 
 function updateButtonState(status) {
   const button = document.getElementById("startStopButton");
-  if (status === "Running" && !running) {
+  if (status === "يعمل" && !running) {
     running = true;
-    button.innerHTML = "<span style='font-size: 1.1em; vertical-align: middle;'>■</span> STOP";
+    button.innerHTML = "<span style='font-size: 1.1em; vertical-align: middle;'>■</span> إيقاف";
     button.style.backgroundColor = "#f44336";
-  } else if (status !== "Running" && running) {
+  } else if (status !== "يعمل" && running) {
     running = false;
-    button.textContent = "► START";
+    button.textContent = "► تشغيل";
     button.style.backgroundColor = "#4CAF50";
   }
 }
@@ -342,7 +342,7 @@ function updateHistoryTable(history) {
     return `<tr class="${rowClasses}">
       <td>${entry.roundNumber}</td>
       <td>${time}</td>
-      <td>${entry.triggerMode === 'button' ? '🖲️ Pushbutton' : '🌐 Web UI'}</td>
+      <td>${entry.triggerMode === 'button' ? '🖲️ زر التشغيل' : '🌐 واجهة الويب'}</td>
       <td class="status-cell ${statusClass}">${entry.status}</td>
     </tr>`;
   }).join('');
@@ -404,7 +404,7 @@ function toggleRobot() {
       updateStatusFromServer();
     })
     .catch(err => {
-      document.getElementById("errorMessage").textContent = "Connection error";
+      document.getElementById("errorMessage").textContent = "خطأ في الاتصال";
       console.error(err);
       stopTimer(); // Ensure timer stops on error
     });
@@ -422,7 +422,7 @@ function resetToDefaults() {
 }
 
 function clearHistory() {
-  if (confirm("Clear all history?")) {
+  if (confirm("هل تريد مسح كل السجل؟")) {
     fetch("/clearhistory", { method: 'POST' })
       .catch(console.error);
   }
@@ -451,7 +451,7 @@ function switchToManual() {
     })
     .catch(error => {
       console.error("Error switching to manual mode:", error);
-      document.getElementById("errorMessage").textContent = "Mode switch failed";
+      document.getElementById("errorMessage").textContent = "فشل تغيير الوضع";
     });
 }
 

@@ -241,7 +241,7 @@ void addRoundToHistory(String status, String trigger) {
   newRecord.status = status;
   newRecord.triggerMode = trigger;  // Use the passed trigger mode
 
-  if (stopwatchValue == 0 && status != "Finished 🏁") return;
+  if (stopwatchValue == 0 && status != "انتهى 🏁") return;
 
   // Shift history array
   if (historyCount >= 10) {
@@ -365,7 +365,7 @@ void startServer() {
     } else if (requestedMode == "manual") {
       setMode("manual");
     }
-    server.send(200, "text/plain", "Mode: " + requestedMode);
+    server.send(200, "text/plain", "الوضع: " + requestedMode);
   });
   server.on("/turnRight90", []() {
     if (manualMode) {
@@ -395,7 +395,7 @@ void startServer() {
     server.send(200);
   });
   robotState = READY;
-  robotStatus = "Ready";
+  robotStatus = "جاهز";
   statusColor = "green";
   server.begin();
   Serial.println("HTTP server started");
@@ -429,7 +429,7 @@ void handleStartStop() {
     server.send(200, "application/json", "{\"success\":true}");
   } else {
     if (count == 5) {
-      server.send(200, "application/json", "{\"success\":false,\"message\":\"Place robot on track first!\"}");
+      server.send(200, "application/json", "{\"success\":false,\"message\":\"ضع الروبوت على الخط أولاً!\"}");
       return;
     }  //all sensors on black
     currentTriggerMode = "web";
@@ -441,7 +441,7 @@ void handleStartStop() {
 
 void startRobot() {
   if (manualMode) {
-    server.send(400, "application/json", "{\"success\":false,\"message\":\"Cannot start in Manual Mode\"}");
+    server.send(400, "application/json", "{\"success\":false,\"message\":\"لا يمكن البدء في وضع اليدوي\"}");
     return;
   }
   startTriggerMode = currentTriggerMode;  // Store how we started
@@ -454,7 +454,7 @@ void startRobot() {
 
   isRunning = true;
   robotState = RUNNING;
-  robotStatus = "Running";
+  robotStatus = "يعمل";
   statusColor = "green";
 
   digitalWrite(LED_PIN, HIGH);  // Turn on LED when running
@@ -480,16 +480,16 @@ void stopRobot() {
   String stopStatus;
   if (interruptTriggerMode != "" && interruptTriggerMode != startTriggerMode) {
     // Cross-mode interruption (button stopped web-started or vice versa)
-    stopStatus = (interruptTriggerMode == "button") ? "Button Interrupted 🛑" : "Web Interrupted 🖥️";
+    stopStatus = (interruptTriggerMode == "button") ? "متوقف عبر الزر 🛑" : "متوقف عبر الويب 🖥️";
   } else if (interruptTriggerMode == "button") {
     // Button stopped button-started run
-    stopStatus = "Button Interrupted 🛑";
+    stopStatus = "متوقف عبر الزر 🛑";
   } else if (interruptTriggerMode == "web") {
     // Web stopped web-started run
-    stopStatus = "Web Interrupted 🖥️";
+    stopStatus = "متوقف عبر الويب 🖥️";
   } else {
     // Normal stop (not an interruption)
-    stopStatus = "stopped 🛑";
+    stopStatus = "متوقف 🛑";
   }
 
   // Only add to history if we have a valid run time
@@ -550,21 +550,21 @@ void addJsonField(String& json, bool& updated, String key, String val) {
 void applyIntParam(String name, int& var, int lo, int hi, String& json, bool& updated) {
   if (!server.hasArg(name)) return;
   var = constrain(server.arg(name).toInt(), lo, hi);
-  preferences.putInt(name, var);
+  preferences.putInt(name.c_str(), var);
   addJsonField(json, updated, name, String(var));
 }
 
 void applyFloatParam(String name, float& var, int dec, float lo, float hi, String& json, bool& updated) {
   if (!server.hasArg(name)) return;
   var = constrain(server.arg(name).toFloat(), lo, hi);
-  preferences.putFloat(name, var);
+  preferences.putFloat(name.c_str(), var);
   addJsonField(json, updated, name, String(var, dec));
 }
 
 void handleSetPID() {
   // Check if client is still connected
   if (!server.client().connected()) {
-    server.send(408, "text/plain", "Request timeout");
+    server.send(408, "text/plain", "انتهت مهلة الطلب");
     return;
   }
   preferences.begin("robot-config", false);
@@ -613,17 +613,18 @@ void resetPID() {
   turnDelay = 250;
 
   // حفظ القيم في Preferences حتى لا تعود للقديمة بعد إعادة الإقلاع
-  preferences.putFloat("Kp", Kp);
-  preferences.putFloat("Ki", Ki);
-  preferences.putFloat("Kd", Kd);
-  preferences.putInt("speedPercentage", speedPercentage);
+  // (نفس المفاتيح التي تستخدمها LoadDefaultValues للقراءة)
+  preferences.putFloat("kp", Kp);
+  preferences.putFloat("ki", Ki);
+  preferences.putFloat("kd", Kd);
+  preferences.putInt("speed", speedPercentage);
   preferences.putInt("turnDelay", turnDelay);
 
   preferences.end();
 
   resetPIDState();
 
-  server.send(200, "application/json", "{\"success\":true,\"message\":\"Reset to defaults\"}");
+  server.send(200, "application/json", "{\"success\":true,\"message\":\"تمت إعادة الافتراضيات\"}");
 }
 
 void setMode(String mode) {
@@ -648,7 +649,7 @@ void setMode(String mode) {
     } else {  // changingToAuto
       manualMode = false;
       robotState = READY;
-      robotStatus = "Ready";
+      robotStatus = "جاهز";
       statusColor = "green";
       Serial.println("Switched to auto mode");
     }
@@ -662,7 +663,7 @@ void clearHistory() {
   interruptTriggerMode = "";  // Reset interrupt
   stopwatchValue = 0;
   robotState = READY;
-  robotStatus = "Ready";
+  robotStatus = "جاهز";
   Serial.println("History cleared");
 }
 
@@ -804,11 +805,11 @@ void endProcedure() {
   // 3. Record the final time
   elapsedTime = millis() - startTime;
   stopwatchValue = elapsedTime;
-  addRoundToHistory("Finished 🏁", startTriggerMode);
+  addRoundToHistory("انتهى 🏁", startTriggerMode);
 
   // 4. Update status (after stopping)
   robotState = FINISHED;
-  robotStatus = "Finished 🏁";
+  robotStatus = "انتهى 🏁";
   statusColor = "green";
 
   // 5. Clear any pending start triggers
