@@ -27,6 +27,20 @@ int sensorReadings[5];
 int turnDelay = 250;
 int count = 0;
 
+// ---------- آلة حالات الكشف عن المنعطفات (غير بلوكينج) ----------
+enum TurnDetectState {
+  TD_NONE,
+  TD_WAIT_CENTER_LOW,
+  TD_BACKING,
+  TD_SWEEP_RIGHT,
+  TD_SWEEP_LEFT,
+  TD_DONE
+};
+TurnDetectState turnDetectState = TD_NONE;
+int turnDetectPhase = 0;
+unsigned long turnDetectTimer = 0;
+const unsigned long TURN_DETECT_TIMEOUT = 5000;  // 5 ثواني كحد أقصى
+
 // ---------- حالة PID ----------
 float lastError = 0;
 float integral = 0;
@@ -115,10 +129,8 @@ void updateLedStatus();
 void handleStartTrigger();
 void FollowPathPID();
 void endProcedure();
-void detect90();
-void turnLeftdetection();
-void turnRightdetection();
 void updateStopwatch();
+void updateTurnDetection();
 
 // ======================================================================
 // ب) نقطة الدخول
@@ -160,7 +172,9 @@ void loop() {
   // Main line following control
   if (!manualMode && isRunning) {
     FollowPathPID();    // Call the line following algorithm
-    updateStopwatch();  // Update timer only when running
+  }
+  if (isRunning) {
+    updateStopwatch();  // Update timer every loop while running
   }
 
   delay(5);  // Small delay to prevent watchdog triggers
@@ -755,38 +769,52 @@ void FollowPathPID() {
   if (manualMode) {
     return;
   }
-  if (isRunning) {
-    // Weighted error: inner sensors stronger
-    readSensors();
-    int weights[5] = { -1, -2, 0, 2, 1 };
-    float error = 0;
-    float correction;
-    count = 0;
-    for (int i = 0; i < 5; i++) {
-      if (sensorReadings[i] == HIGH) {
-        error += weights[i];
-        count++;
-      }
+  if (!isRunning) {
+    return;
+  }
+
+  // إذا كنا وسط كشف عن منعطف 90 درجة، شغّل آلة الحالات بدلاً من PID الطبيعي
+  if (turnDetectState != TD_NONE) {
+    updateTurnDetection();
+    return;
+  }
+
+  // التتبع الطبيعي باستخدام PID
+  // Weighted error: inner sensors stronger
+  readSensors();
+  int weights[5] = { -1, -2, 0, 2, 1 };
+  float error = 0;
+  float correction;
+  count = 0;
+  for (int i = 0; i < 5; i++) {
+    if (sensorReadings[i] == HIGH) {
+      error += weights[i];
+      count++;
     }
+  }
 
 
-    // PID terms
-    integral += error;
-    integral = constrain(integral, -Imax, Imax);
-    float derivative = error - lastError;
-    correction = Kp * error + Ki * integral + Kd * derivative;
-    lastError = error;
+  // PID terms
+  integral += error;
+  integral = constrain(integral, -Imax, Imax);
+  float derivative = error - lastError;
+  correction = Kp * error + Ki * integral + Kd * derivative;
+  lastError = error;
 
-    // Compute motor speeds
-    int speedL = constrain(255 * speedPercentage / 100 - correction, -255, 255);
-    int speedR = constrain(255 * speedPercentage / 100 + correction, -255, 255);
-    if (count == 5) {
-      move(STOP);
-      endProcedure();
-      return;  // Exit completely
-    }
-    setMotorSpeeds(speedL, speedR);
-    detect90();
+  // Compute motor speeds
+  int speedL = constrain(255 * speedPercentage / 100 - correction, -255, 255);
+  int speedR = constrain(255 * speedPercentage / 100 + correction, -255, 255);
+  if (count == 5) {
+    move(STOP);
+    endProcedure();
+    return;  // Exit completely
+  }
+  setMotorSpeeds(speedL, speedR);
+
+  // بداية كشف عن منعطف 90 درجة (حساس الوسط على الخط الأسود)
+  if (sensorReadings[2] == HIGH) {
+    turnDetectState = TD_WAIT_CENTER_LOW;
+    turnDetectTimer = millis();
   }
 }
 
@@ -823,90 +851,139 @@ void endProcedure() {
   }
 }
 
-void detect90() {
-  readSensors();
+void updateTurnDetection() {
+  unsigned long now = millis();
 
-  // Only proceed if center sensor detects line
-  if (sensorReadings[2] == HIGH) {
-    // Wait while center sensor is HIGH (with safety timeout)
-    unsigned long detect90Start = millis();
-    const unsigned long detect90Timeout = 5000;  // 5 seconds max
-    while (sensorReadings[2] == HIGH && (millis() - detect90Start < detect90Timeout)) {
+  switch (turnDetectState) {
+    case TD_NONE:
+      break;
+
+    case TD_WAIT_CENTER_LOW: {
       readSensors();
 
-      // Check if all sensors are HIGH (end of track)
-      bool allSensorsHigh = true;
+      // التحقق من نهاية المسار (كل الحساسات عالية)
+      bool allHigh = true;
       for (int i = 0; i < 5; i++) {
         if (sensorReadings[i] == LOW) {
-          allSensorsHigh = false;
+          allHigh = false;
           break;
         }
       }
-
-      if (allSensorsHigh) {
+      if (allHigh) {
         endProcedure();
+        turnDetectState = TD_NONE;
         return;
       }
 
-      delay(5);  // Small delay to prevent watchdog issues
-    }
-    // Count how many other sensors are HIGH
-    int highCount = 0;
-    for (int i = 0; i < 5; i++) {
-      if (i != 2 && sensorReadings[i] == HIGH) {
-        highCount++;
+      // هل خرج حساس الوسط من الخط؟
+      if (sensorReadings[2] == LOW) {
+        int highCount = 0;
+        for (int i = 0; i < 5; i++) {
+          if (i != 2 && sensorReadings[i] == HIGH) {
+            highCount++;
+          }
+        }
+        if (highCount >= 1) {
+          // منعطف 90 درجة مؤكد — ابدأ التسلسل غير البلوكينج
+          turnDetectState = TD_BACKING;
+          turnDetectPhase = 0;
+          turnDetectTimer = now;
+        } else {
+          // إنذار كاذب — العودة للتتبع الطبيعي
+          turnDetectState = TD_NONE;
+        }
       }
-    }
-    if (highCount >= 1) {
-      // Center sensor went LOW, now check other sensors
-      readSensors();
-      move(STOP);
-      delay(100);
-      readSensors();
-      // Back up a bit to get better positioning
-      setMotorSpeeds(-130, -130);
-      delay(turnDelay);
-      move(STOP);
-      delay(100);
-      // Perform detection sweep to left
-      readSensors();
-      turnRightdetection();
-      turnLeftdetection();
-      delay(5);
-    }
-  }
-}
 
-void turnLeftdetection() {
-  move(STOP);
-  delay(50);
-  // Rotate counter-clockwise for detection
-  while (sensorReadings[0] == LOW && sensorReadings[1] == LOW) {
-    setMotorSpeeds(0, 100);
-    readSensors();
-    if (sensorReadings[0] == HIGH || sensorReadings[1] == HIGH) {
-      break;  // Left sensors detected black
+      // مهلة أمان
+      if (now - turnDetectTimer > TURN_DETECT_TIMEOUT) {
+        turnDetectState = TD_NONE;
+      }
+      break;
     }
-    delay(10);  // Small delay to prevent watchdog issues
-  }
-  move(STOP);
-  delay(50);
-}
 
-void turnRightdetection() {
-  move(STOP);
-  delay(50);
-  // Rotate clockwise for detection
-  while (sensorReadings[3] == LOW && sensorReadings[4] == LOW) {
-    setMotorSpeeds(100, 0);
-    readSensors();
-    if (sensorReadings[3] == HIGH || sensorReadings[4] == HIGH) {
-      break;  // Right sensors detected black
-    }
-    delay(10);  // Small delay to prevent watchdog issues
-  }             // Shorter delay for detection sweep
-  move(STOP);
-  delay(50);
+    case TD_BACKING:
+      if (turnDetectPhase == 0) {
+        move(STOP);
+        turnDetectPhase = 1;
+        turnDetectTimer = now;
+      } else if (turnDetectPhase == 1) {
+        if (now - turnDetectTimer >= 100) {
+          setMotorSpeeds(-130, -130);  // للخلف قليلاً
+          turnDetectPhase = 2;
+          turnDetectTimer = now;
+        }
+      } else if (turnDetectPhase == 2) {
+        if (now - turnDetectTimer >= turnDelay) {
+          move(STOP);
+          turnDetectPhase = 3;
+          turnDetectTimer = now;
+        }
+      } else if (turnDetectPhase == 3) {
+        if (now - turnDetectTimer >= 100) {
+          readSensors();
+          turnDetectState = TD_SWEEP_RIGHT;
+          turnDetectPhase = 0;
+          turnDetectTimer = now;
+        }
+      }
+      break;
+
+    case TD_SWEEP_RIGHT:
+      if (turnDetectPhase == 0) {
+        move(STOP);
+        turnDetectPhase = 1;
+        turnDetectTimer = now;
+      } else if (turnDetectPhase == 1) {
+        if (now - turnDetectTimer >= 50) {
+          setMotorSpeeds(100, 0);  // دوران باتجاه اليمين للكشف عن الحساسات اليمنى
+          turnDetectPhase = 2;
+        }
+      } else if (turnDetectPhase == 2) {
+        readSensors();
+        if (sensorReadings[3] == HIGH || sensorReadings[4] == HIGH) {
+          move(STOP);
+          turnDetectState = TD_SWEEP_LEFT;
+          turnDetectPhase = 0;
+          turnDetectTimer = now;
+        }
+        // الاستمرار في الدوران حتى الاستشعار
+      }
+      break;
+
+    case TD_SWEEP_LEFT:
+      if (turnDetectPhase == 0) {
+        // متوقف بالفعل من الحالة السابقة
+        turnDetectPhase = 1;
+        turnDetectTimer = now;
+      } else if (turnDetectPhase == 1) {
+        if (now - turnDetectTimer >= 50) {
+          setMotorSpeeds(0, 100);  // دوران باتجاه اليسار للكشف عن الحساسات اليسرى
+          turnDetectPhase = 2;
+        }
+      } else if (turnDetectPhase == 2) {
+        readSensors();
+        if (sensorReadings[0] == HIGH || sensorReadings[1] == HIGH) {
+          move(STOP);
+          turnDetectState = TD_DONE;
+          turnDetectPhase = 0;
+          turnDetectTimer = now;
+        }
+        // الاستمرار في الدوران حتى الاستشعار
+      }
+      break;
+
+    case TD_DONE:
+      if (turnDetectPhase == 0) {
+        move(STOP);
+        turnDetectPhase = 1;
+        turnDetectTimer = now;
+      } else if (turnDetectPhase == 1) {
+        if (now - turnDetectTimer >= 50) {
+          turnDetectState = TD_NONE;  // العودة للتتبع الطبيعي
+        }
+      }
+      break;
+  }
 }
 
 void updateStopwatch() {
