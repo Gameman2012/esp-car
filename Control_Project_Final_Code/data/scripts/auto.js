@@ -302,9 +302,9 @@ function updateButtonState(status) {
 function updateTriggerMode(mode) {
   const triggerElement = document.getElementById("triggerMode");
   if (mode === "button") {
-    triggerElement.textContent = "🖲️ Pushbutton";
+    triggerElement.textContent = "🖲️ زر التشغيل";
   } else if (mode === "web") {
-    triggerElement.textContent = "🌐 Web UI";
+    triggerElement.textContent = "🌐 واجهة الويب";
   } else {
     triggerElement.textContent = "-";
   }
