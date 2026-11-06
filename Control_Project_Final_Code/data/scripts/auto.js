@@ -158,26 +158,29 @@ function updateStatusFromServer() {
     .then(data => {
       if (!data) return;
 
-      // Timer and status tracking
+      // Timer and status tracking — استخدام الوقت من السيرفر مباشرة (مزامنة حقيقية)
+      if (data.stopwatch !== undefined) {
+        elapsedTime = data.stopwatch;
+        updateTimerDisplay(elapsedTime);
+      }
+
       if (data.status) {
         const statusLower = data.status.toLowerCase();
 
-        if (statusLower.includes("finished") && data.lastRunTime !== undefined) {
-          // Use server's final time for completed runs
-          elapsedTime = data.lastRunTime;
-          updateTimerDisplay(elapsedTime);
+        if (statusLower.includes("finished")) {
+          if (data.finalTime !== undefined) {
+            elapsedTime = data.finalTime;
+            updateTimerDisplay(elapsedTime);
+          }
           stopTimer();
         } else if (statusLower.includes("running")) {
-          // Start timer if not already running
+          // تأكد أن المؤقت يعمل (لحالات انقطاع الاتصال المؤقتة)
           if (!isTimerRunning) {
-            resetTimer(); // Reset timer every time it starts running
             startTimer();
           }
         } else {
-          // Stop timer if it was running
-          if (isTimerRunning) {
-            stopTimer();
-          }
+          // إيقاف المؤقت عند التوقف أو الاستعداد
+          stopTimer();
         }
       }
 
@@ -237,14 +240,10 @@ function updateStatusFromServer() {
 
 function startTimer() {
   if (isTimerRunning) return;
-
-  // Use server's start time if possible to ensure exact matching
-  startTime = Date.now() - elapsedTime;
   isTimerRunning = true;
 
   timerInterval = setInterval(() => {
-    // Ensure we round to nearest 10ms for consistent display
-    elapsedTime = Math.round((Date.now() - startTime) / 10) * 10;
+    // عرض القيمة المزامنة من السيرفر (لا حساب محلي للوقت)
     updateTimerDisplay(elapsedTime);
   }, STOPWATCH_UPDATE_INTERVAL);
 }
